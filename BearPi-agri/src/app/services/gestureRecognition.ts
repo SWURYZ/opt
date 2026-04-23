@@ -26,7 +26,7 @@ type GestureCallback = (event: GestureEvent) => void;
 // WASM 文件由 public/mediapipe/ 本地提供，避免 CDN 网络依赖
 const WASM_BASE = "/mediapipe";
 const HAND_MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+  "/mediapipe-models/hand_landmarker.task";
 const GESTURE_MODEL_URL = "/models/gesture_model/gesture_model.onnx";
 const GESTURE_LABELS_URL = "/models/gesture_model/labels.json";
 
