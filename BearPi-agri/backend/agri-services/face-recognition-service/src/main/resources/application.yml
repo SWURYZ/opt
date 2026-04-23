@@ -1,0 +1,62 @@
+server:
+  port: 8090
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://47.108.58.107:3306/dream6?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:c0765083cd3f57ab}
+    hikari:
+      initialization-fail-timeout: -1
+  application:
+    name: face-recognition-service
+  jpa:
+    database-platform: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.community.dialect.MySQLLegacyDialect}
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+  flyway:
+    enabled: ${APP_FLYWAY_ENABLED:false}
+    locations: classpath:db/migration
+    table: flyway_schema_history_face_recognition
+    baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui/index.html
+
+face-recognition:
+  # ===== 人脸检测模型配置 =====
+  # 模型枚举：RETINA_FACE（高精度）/ ULTRA_LIGHT_FAST_GENERIC_FACE（极速）/ SEETA_FACE6_MODEL
+  det-model-enum: ${FACE_DET_MODEL_ENUM:RETINA_FACE}
+  # 模型文件路径（可留空，SDK 自动下载内置模型）
+  det-model-path: ${FACE_DET_MODEL_PATH:}
+
+  # ===== 人脸识别模型配置 =====
+  # 模型枚举：INSIGHT_FACE_MOBILE_FACENET_MODEL（高速）/ INSIGHT_FACE_IRSE50_MODEL（高精度）
+  rec-model-enum: ${FACE_REC_MODEL_ENUM:INSIGHT_FACE_IRSE50_MODEL}
+  # 模型文件路径（相对 backend/ 工作目录，或用环境变量指定绝对路径）
+  rec-model-path: ${FACE_REC_MODEL_PATH:models/face_model/recognition/InsightFace/model_ir_se50.pt}
+
+  # 人脸匹配相似度阈值（InsightFace 推荐 0.62），值越高越严格
+  similarity-threshold: ${FACE_SIMILARITY_THRESHOLD:0.62}
+  # 人脸检测置信度阈值
+  confidence-threshold: ${FACE_CONFIDENCE_THRESHOLD:0.5}
+  # 上传的人脸图片存储目录
+  storage-path: ${FACE_STORAGE_PATH:data/face-images}
+
+  # ===== 活体检测模型配置 =====
+  # 是否启用活体检测（注册和登录时验证真人）
+  liveness-enabled: ${FACE_LIVENESS_ENABLED:true}
+  # 模型枚举：IIC_FL_MODEL（阿里通义实验室）/ MINI_VISION_MODEL（小视科技）
+  liveness-model-enum: ${FACE_LIVENESS_MODEL_ENUM:IIC_FL_MODEL}
+  # 活体检测模型文件路径（相对 backend/ 工作目录）
+  liveness-model-path: ${FACE_LIVENESS_MODEL_PATH:models/liveness/IIC_Fl.onnx}
+  # 活体检测阈值（超过此值判定为真人，默认 0.8）
+  liveness-threshold: ${FACE_LIVENESS_THRESHOLD:0.8}

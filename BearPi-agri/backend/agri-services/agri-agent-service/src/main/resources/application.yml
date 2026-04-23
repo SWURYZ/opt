@@ -1,0 +1,18 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: agri-agent-service
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui/index.html
+
+coze:
+  api:
+    base-url: ${COZE_API_BASE_URL:https://api.coze.cn}
+    chat-path: ${COZE_API_CHAT_PATH:/v3/chat}
+    bot-id: ${COZE_BOT_ID:7628415950198980648}
+    pat: ${COZE_PAT:pat_xTeTK1pvxkZYBMaL7JAJYV8Vq7ZybUo9AVmU4cmTC5oMjFfTV52BceIKRkBKrLjc}
+    timeout-seconds: ${COZE_TIMEOUT_SECONDS:60}

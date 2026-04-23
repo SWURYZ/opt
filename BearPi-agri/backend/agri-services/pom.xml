@@ -1,0 +1,28 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.smartagri</groupId>
+        <artifactId>smart-agri-backend</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>agri-services</artifactId>
+    <packaging>pom</packaging>
+    <name>agri-services</name>
+
+    <modules>
+        <module>iot-access-service</module>
+        <module>device-control-service</module>
+        <module>light-schedule-service</module>
+        <module>threshold-alert-service</module>
+        <module>agri-agent-service</module>
+        <module>composite-condition-service</module>
+        <module>greenhouse-monitor-service</module>
+        <module>face-recognition-service</module>
+        <module>smart-decision-service</module>
+        <module>historical-analysis-service</module>
+    </modules>
+</project>

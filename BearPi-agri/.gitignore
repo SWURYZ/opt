@@ -1,0 +1,68 @@
+node_modules
+backend/**/target
+backend/**/data/*.db
+backend/**/data/*.trace.db
+.runtime/
+backend/**/hs_err_pid*.log
+backend/**/replay_pid*.log
+hs_err_pid*.log
+replay_pid*.log
+backend/face-service.log
+
+# 压缩包
+*.rar
+
+# 大模型文件 (超过 GitHub 100MB 限制)
+*.onnx
+*.pt
+backend/models/
+# 例外：手势识别小模型（<300KB）需要纳入版本管理
+!backend/models/
+!backend/models/gesture_model/
+!backend/models/gesture_model/gesture_model.onnx
+!backend/models/gesture_model/labels.json
+!backend/models/gesture_model.tflite
+!backend/models/labels.json
+# 活体检测模型（1.3MB）
+!backend/models/liveness/
+!backend/models/liveness/IIC_Fl.onnx
+!backend/models/liveness/configuration.json
+# 害虫识别 ONNX 模型（6.5MB）
+!backend/pest-recognition-service/models/
+!backend/pest-recognition-service/models/best.onnx
+!backend/pest-recognition-service/models/names.json
+# 前端手势识别 ONNX 模型（<300KB）
+!public/models/gesture_model/
+!public/models/gesture_model/gesture_model.onnx
+!public/models/gesture_model/labels.json
+
+# Pest recognition runtime artifacts
+backend/pest-recognition-service/latest.json
+backend/pest-recognition-service/uploads/
+
+backend/build*.log
+
+# 微服务运行日志
+backend/**/*.out.log
+backend/**/*.err.log
+backend/**/*.trace.log
+backend/**/*-test.log
+backend/**/*-e2e.log
+backend/**/*-final.log
+backend/**/*-verify.log
+
+# Python virtual environments
+.venv/
+venv/
+**/.venv/
+**/venv/
+
+# DJL cache
+.djl-cache/
+**/.djl-cache/
+
+# Build output
+dist/
+**/dist/
+
+# Large wasm (served from CDN/public only if needed)
