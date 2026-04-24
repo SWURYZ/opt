@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Power,
   Clock,
@@ -27,7 +27,8 @@ import {
 } from "../services/deviceControl";
 import { fetchAllConnectedDevices, type DeviceMappingResponse } from "../services/greenhouseMonitor";
 import { useGreenhouses } from "../lib/greenhouseStore";
-import { useVirtualSwitches, type VirtualSwitch } from "../lib/virtualSwitchStore";
+import { useVirtualSwitches, getEffectiveLed, type VirtualSwitch } from "../lib/virtualSwitchStore";
+import { getCropLightProfile } from "../lib/cropLightProfiles";
 
 type DeviceStatus = "on" | "off" | "loading" | "error";
 type SwitchKey = "light" | "fan" | "water";
@@ -82,6 +83,7 @@ export function DeviceControl() {
   const [activeTab, setActiveTab] = useState<"manual" | "timer">("manual");
   const [boundByGreenhouse, setBoundByGreenhouse] = useState<Record<string, DeviceMappingResponse>>({});
   const [controlStates, setControlStates] = useState<Record<string, GhControlState>>({});
+  const lightManualOverrideRef = useRef<Record<string, boolean>>({});
   const [timers, setTimers] = useState<ScheduleRuleResponse[]>([]);
   const [timerGreenhouse, setTimerGreenhouse] = useState("");
   const [showAddTimer, setShowAddTimer] = useState(false);
@@ -93,8 +95,22 @@ export function DeviceControl() {
     commandType: "LIGHT_CONTROL",
   });
   const [timerMessage, setTimerMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [timeTick, setTimeTick] = useState(() => Date.now());
+  const isNight = useMemo(() => {
+    const hour = new Date(timeTick).getHours();
+    return hour >= 18 || hour < 6;
+  }, [timeTick]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTimeTick(Date.now()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const greenhouseNames = useMemo(() => greenhouseList.map((g) => g.name), [greenhouseList]);
+  const greenhouseCrops = useMemo<Record<string, string>>(
+    () => Object.fromEntries(greenhouseList.map((g) => [g.name, g.crop])),
+    [greenhouseList],
+  );
 
   const selectedTimerDeviceId = useMemo(() => {
     if (!timerGreenhouse) return "";
@@ -106,6 +122,8 @@ export function DeviceControl() {
     return timers.filter((r) => r.deviceId === selectedTimerDeviceId);
   }, [timers, selectedTimerDeviceId]);
 
+  const timerLightProfile = getCropLightProfile(greenhouseCrops[timerGreenhouse]);
+
   const ensureControlState = useCallback((ghName: string) => {
     setControlStates((prev) => (prev[ghName] ? prev : { ...prev, [ghName]: defaultGhState() }));
   }, []);
@@ -114,9 +132,11 @@ export function DeviceControl() {
     try {
       const status = await fetchRealtimeDeviceStatus(deviceId);
       if (status) {
+        const nextState = applyRealtimeToState(status);
+        if (isNight && !lightManualOverrideRef.current[ghName]) nextState.light = "on";
         setControlStates((prev) => ({
           ...prev,
-          [ghName]: { ...applyRealtimeToState(status), feedback: prev[ghName]?.feedback },
+          [ghName]: { ...nextState, feedback: prev[ghName]?.feedback },
         }));
         return;
       }
@@ -127,15 +147,17 @@ export function DeviceControl() {
     try {
       const status = await fetchDeviceStatus(deviceId);
       if (status) {
+        const nextState = applyFallbackToState(status);
+        if (isNight && !lightManualOverrideRef.current[ghName]) nextState.light = "on";
         setControlStates((prev) => ({
           ...prev,
-          [ghName]: { ...applyFallbackToState(status), feedback: prev[ghName]?.feedback },
+          [ghName]: { ...nextState, feedback: prev[ghName]?.feedback },
         }));
       }
     } catch {
       // ignore errors to keep UI responsive
     }
-  }, []);
+  }, [isNight]);
 
   const refreshBoundDevices = useCallback(async () => {
     const nextByGh: Record<string, DeviceMappingResponse> = {};
@@ -179,14 +201,14 @@ export function DeviceControl() {
         const old = next[ghName] ?? defaultGhState();
         next[ghName] = {
           ...old,
-          light: v.led ? "on" : "off",
+          light: getEffectiveLed(v, isNight) ? "on" : "off",
           fan: v.motor ? "on" : "off",
           water: v.water ? "on" : "off",
         };
       }
       return next;
     });
-  }, [greenhouseNames, boundByGreenhouse, virtualSwitchMap]);
+  }, [greenhouseNames, boundByGreenhouse, virtualSwitchMap, isNight]);
 
   useEffect(() => {
     // 绑定真实设备的大棚定时轮询，保持与 RealtimeMonitor 的开关状态一致
@@ -220,7 +242,7 @@ export function DeviceControl() {
     if (!binding?.deviceId) {
       // 未绑定时写入共享虚拟开关 store，让 DeviceControl 与 RealtimeMonitor 同步
       const now = virtualSwitchMap[ghName] ?? { led: false, motor: false, water: false };
-      if (key === "light") updateVirtualSwitch(ghName, { led: !now.led });
+      if (key === "light") updateVirtualSwitch(ghName, { led: !getEffectiveLed(now, isNight), ledManualOverride: isNight });
       if (key === "fan") updateVirtualSwitch(ghName, { motor: !now.motor });
       if (key === "water") updateVirtualSwitch(ghName, { water: !now.water });
       setControlStates((prev) => ({
@@ -232,6 +254,9 @@ export function DeviceControl() {
 
     const commandType = key === "light" ? "LIGHT_CONTROL" : "MOTOR_CONTROL";
     const current = key === "light" ? prevState.light : key === "fan" ? prevState.fan : prevState.water;
+    if (key === "light" && isNight) {
+      lightManualOverrideRef.current[ghName] = true;
+    }
     const targetAction = current === "on" ? "OFF" : "ON";
 
     setControlStates((prev) => {
@@ -301,11 +326,6 @@ export function DeviceControl() {
       window.setTimeout(() => setTimerMessage(null), 2600);
       return;
     }
-    if (newTimer.turnOnTime >= newTimer.turnOffTime) {
-      setTimerMessage({ type: "error", text: "新增失败：开启时间不能晚于或等于关闭时间" });
-      window.setTimeout(() => setTimerMessage(null), 2600);
-      return;
-    }
     try {
       await createScheduleRule({
         deviceId: selectedTimerDeviceId,
@@ -327,6 +347,20 @@ export function DeviceControl() {
     }
   }
 
+  function applyNightLightRecommendation() {
+    const crop = greenhouseCrops[timerGreenhouse] ?? "番茄";
+    const profile = getCropLightProfile(crop);
+    setNewTimer((p) => ({
+      ...p,
+      ruleName: `${crop}夜间${profile.label}`,
+      turnOnTime: profile.nightStart,
+      turnOffTime: profile.nightEnd,
+      repeat: "DAILY",
+      commandType: "LIGHT_CONTROL",
+    }));
+    setShowAddTimer(true);
+  }
+
   async function handleDeleteRule(id: number) {
     try {
       await deleteScheduleRule(id);
@@ -340,7 +374,7 @@ export function DeviceControl() {
   }
 
   const manualCardConfig: Array<{ key: SwitchKey; name: string; type: string; icon: any; color: keyof typeof colorMap }> = [
-    { key: "light", name: "补光灯", type: "补光灯", icon: Sun, color: "yellow" },
+    { key: "light", name: "补光灯", type: "按作物夜间补光", icon: Sun, color: "yellow" },
     { key: "fan", name: "风扇", type: "风机", icon: Fan, color: "blue" },
     { key: "water", name: "浇水设施", type: "灌溉", icon: Droplets, color: "cyan" },
   ];
@@ -378,7 +412,7 @@ export function DeviceControl() {
             <div className="text-blue-500">📡</div>
             <div className="text-xs text-blue-700">
               <span className="font-medium">控制流程：</span>
-              按大棚绑定设备独立控制补光灯、风扇和浇水。新增大棚后会自动出现待绑定控制位。
+              按大棚绑定设备独立控制补光灯、风扇和浇水；夜间补光灯显示自动开启，白天按设备状态显示。
             </div>
           </div>
 
@@ -386,12 +420,17 @@ export function DeviceControl() {
             {greenhouseNames.map((ghName) => {
               const binding = boundByGreenhouse[ghName];
               const state = controlStates[ghName] || defaultGhState();
+              const crop = greenhouseCrops[ghName] ?? "番茄";
+              const lightProfile = getCropLightProfile(crop);
               return (
                 <div key={ghName} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className={`w-2 h-2 rounded-full ${binding ? "bg-green-500" : "bg-gray-300"}`} />
                       <h3 className="text-sm font-semibold text-gray-800">{ghName} — BearPi 设备</h3>
+                      <span className="text-xs px-2 py-0.5 rounded-full border" style={{ color: lightProfile.color, borderColor: `${lightProfile.color}55`, backgroundColor: `${lightProfile.color}14` }}>
+                        {crop} · 夜间{lightProfile.label}
+                      </span>
                       <span className="text-xs text-gray-400 font-mono truncate">{binding?.deviceId || "未绑定设备"}</span>
                     </div>
                   </div>
@@ -425,7 +464,9 @@ export function DeviceControl() {
                               </div>
                             </div>
                             <h3 className="text-sm font-semibold text-gray-800 mb-0.5">{cfg.name}</h3>
-                            <div className="text-xs text-gray-400 mb-3 truncate">{cfg.type}</div>
+                            <div className="text-xs text-gray-400 mb-3 truncate">
+                              {cfg.key === "light" ? `${lightProfile.label} · ${lightProfile.nightStart}-${lightProfile.nightEnd}` : cfg.type}
+                            </div>
 
                             <div className="flex items-center justify-between">
                               <span
@@ -433,7 +474,9 @@ export function DeviceControl() {
                                   status === "on" ? "text-green-600" : status === "loading" ? "text-gray-400" : "text-gray-400"
                                 }`}
                               >
-                                {status === "on" ? "运行中" : status === "loading" ? "执行中..." : "已停止"}
+                                {cfg.key === "light" && isNight && status === "on"
+                                  ? `${lightProfile.label}运行中`
+                                  : status === "on" ? "运行中" : status === "loading" ? "执行中..." : "已停止"}
                               </span>
                               <button
                                 onClick={() => void handleToggle(ghName, cfg.key)}
@@ -515,6 +558,15 @@ export function DeviceControl() {
               </select>
               <span className="text-xs text-gray-400 font-mono">{selectedTimerDeviceId || "未绑定设备"}</span>
               <button
+                onClick={applyNightLightRecommendation}
+                disabled={!selectedTimerDeviceId}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                title={`${greenhouseCrops[timerGreenhouse] ?? "作物"}推荐：${timerLightProfile.label} ${timerLightProfile.nightStart}-${timerLightProfile.nightEnd}`}
+              >
+                <Sun className="w-4 h-4" />
+                夜间补光
+              </button>
+              <button
                 onClick={() => setShowAddTimer(true)}
                 disabled={!selectedTimerDeviceId}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
@@ -533,7 +585,10 @@ export function DeviceControl() {
 
           {showAddTimer && selectedTimerDeviceId && (
             <div className="bg-white rounded-xl border-2 border-green-300 p-5 shadow-sm">
-              <h4 className="text-sm font-semibold text-gray-800 mb-4">新增定时安排</h4>
+              <h4 className="text-sm font-semibold text-gray-800 mb-2">新增定时安排</h4>
+              <div className="text-xs rounded-lg border px-3 py-2 mb-4" style={{ color: timerLightProfile.color, borderColor: `${timerLightProfile.color}55`, backgroundColor: `${timerLightProfile.color}12` }}>
+                当前作物推荐夜间补光：{greenhouseCrops[timerGreenhouse] ?? "作物"} · {timerLightProfile.label} · {timerLightProfile.nightStart}-{timerLightProfile.nightEnd}
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 mb-1.5 block">控制类型</label>

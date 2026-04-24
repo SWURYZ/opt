@@ -37,13 +37,17 @@ ASSET_VERSION = int(time.time())
 LATEST_FILE = ROOT / "latest.json"
 
 DEFAULT_MODEL_PATH = ROOT / "models" / "best.onnx"
-MODEL_PATH = Path(os.getenv("MODEL_PATH", str(DEFAULT_MODEL_PATH)))
+MODEL_PATH = Path(os.getenv("MODEL_PATH", str(DEFAULT_MODEL_PATH))).expanduser()
+if not MODEL_PATH.is_absolute():
+    MODEL_PATH = (ROOT / MODEL_PATH).resolve()
 NAMES_PATH = ROOT / "models" / "names.json"
 
 NAME_MAP_CSV = ROOT / "insect_names_en_zh.csv"
 
 # ── 植物病害模型 (MobileNetV2, PlantVillage 38 类) ──
-PLANT_MODEL_PATH = Path(os.getenv("PLANT_MODEL_PATH", str(ROOT / "models" / "plant_disease.onnx")))
+PLANT_MODEL_PATH = Path(os.getenv("PLANT_MODEL_PATH", str(ROOT / "models" / "plant_disease.onnx"))).expanduser()
+if not PLANT_MODEL_PATH.is_absolute():
+    PLANT_MODEL_PATH = (ROOT / PLANT_MODEL_PATH).resolve()
 PLANT_IMG_SIZE = 224
 PLANT_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 PLANT_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)

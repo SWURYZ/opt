@@ -5,10 +5,13 @@ const IOT_ACCESS_BASE = "/api/v1/iot";
 
 /* ==================== 业务三：设备远程手动控制 ==================== */
 
+export type ManualCommandType = "LIGHT_CONTROL" | "MOTOR_CONTROL";
+export type ManualAction = "ON" | "OFF";
+
 export interface ManualControlRequest {
   deviceId: string;
-  commandType: string;
-  action: string;
+  commandType: ManualCommandType;
+  action: ManualAction;
 }
 
 export interface ManualControlResponse {
@@ -55,32 +58,43 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+function apiError(message: string, res?: Response): Error {
+  return new Error(res ? `${message}: ${res.status}` : message);
+}
+
+async function readApiResponse<T>(res: Response, fallbackMessage: string): Promise<T> {
+  if (!res.ok) {
+    throw apiError(fallbackMessage, res);
+  }
+  const json: ApiResponse<T> = await res.json();
+  if (json.code !== 0) {
+    throw new Error(json.message || fallbackMessage);
+  }
+  return json.data;
+}
+
 export async function sendManualControl(req: ManualControlRequest): Promise<ManualControlResponse> {
   const res = await fetch(`${DEVICE_CONTROL_BASE}/manual`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
-  const json: ApiResponse<ManualControlResponse> = await res.json();
-  return json.data;
+  return readApiResponse<ManualControlResponse>(res, "手动控制失败");
 }
 
 export async function fetchDeviceStatus(deviceId: string): Promise<DeviceStatusResponse> {
   const res = await fetch(`${DEVICE_CONTROL_BASE}/devices/${encodeURIComponent(deviceId)}/status`);
-  const json: ApiResponse<DeviceStatusResponse> = await res.json();
-  return json.data;
+  return readApiResponse<DeviceStatusResponse>(res, "获取设备状态失败");
 }
 
 export async function fetchRealtimeDeviceStatus(deviceId: string): Promise<RealtimeDeviceStatus> {
   const res = await fetch(`${IOT_ACCESS_BASE}/devices/${encodeURIComponent(deviceId)}/status`);
-  const json: ApiResponse<RealtimeDeviceStatus> = await res.json();
-  return json.data;
+  return readApiResponse<RealtimeDeviceStatus>(res, "获取实时设备状态失败");
 }
 
 export async function fetchCommandHistory(deviceId: string): Promise<ControlCommand[]> {
   const res = await fetch(`${DEVICE_CONTROL_BASE}/devices/${encodeURIComponent(deviceId)}/commands`);
-  const json: ApiResponse<ControlCommand[]> = await res.json();
-  return json.data;
+  return readApiResponse<ControlCommand[]>(res, "获取指令历史失败");
 }
 
 /* ==================== 业务四：补光灯定时控制 ==================== */
@@ -120,8 +134,7 @@ export interface ScheduleExecutionLog {
 
 export async function fetchScheduleRules(): Promise<ScheduleRuleResponse[]> {
   const res = await fetch(`${LIGHT_SCHEDULE_BASE}/rules`);
-  const json: ApiResponse<ScheduleRuleResponse[]> = await res.json();
-  return json.data;
+  return readApiResponse<ScheduleRuleResponse[]>(res, "获取定时规则失败");
 }
 
 export async function createScheduleRule(req: ScheduleRuleRequest): Promise<ScheduleRuleResponse> {
@@ -130,11 +143,7 @@ export async function createScheduleRule(req: ScheduleRuleRequest): Promise<Sche
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
-  const json: ApiResponse<ScheduleRuleResponse> = await res.json();
-  if (json.code !== 0) {
-    throw new Error(json.message || "创建失败");
-  }
-  return json.data;
+  return readApiResponse<ScheduleRuleResponse>(res, "创建失败");
 }
 
 export async function updateScheduleRule(id: number, req: ScheduleRuleRequest): Promise<ScheduleRuleResponse> {
@@ -143,25 +152,24 @@ export async function updateScheduleRule(id: number, req: ScheduleRuleRequest): 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
-  const json: ApiResponse<ScheduleRuleResponse> = await res.json();
-  return json.data;
+  return readApiResponse<ScheduleRuleResponse>(res, "更新定时规则失败");
 }
 
 export async function toggleScheduleRule(id: number, enabled: boolean): Promise<void> {
-  await fetch(`${LIGHT_SCHEDULE_BASE}/rules/${id}/toggle?enabled=${enabled}`, {
+  const res = await fetch(`${LIGHT_SCHEDULE_BASE}/rules/${id}/toggle?enabled=${enabled}`, {
     method: "PATCH",
   });
+  await readApiResponse<unknown>(res, "切换定时规则失败");
 }
 
 export async function deleteScheduleRule(id: number): Promise<void> {
   const res = await fetch(`${LIGHT_SCHEDULE_BASE}/rules/${id}`, { method: "DELETE" });
   if (!res.ok) {
-    throw new Error(`Delete failed: ${res.status}`);
+    throw apiError("删除失败", res);
   }
 }
 
 export async function fetchExecutionLogs(ruleId: number): Promise<ScheduleExecutionLog[]> {
   const res = await fetch(`${LIGHT_SCHEDULE_BASE}/rules/${ruleId}/logs`);
-  const json: ApiResponse<ScheduleExecutionLog[]> = await res.json();
-  return json.data;
+  return readApiResponse<ScheduleExecutionLog[]>(res, "获取执行日志失败");
 }

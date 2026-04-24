@@ -12,6 +12,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import type { SensorKey } from "../services/realtime";
+import { getCropLightProfile } from "../lib/cropLightProfiles";
 
 // ============================================================
 // Props
@@ -23,6 +24,9 @@ interface Props {
   ledOn: boolean;
   motorOn: boolean;
   waterOn?: boolean;
+  isNight?: boolean;
+  lightTint?: string;
+  lightLabel?: string;
 }
 
 // ============================================================
@@ -55,6 +59,10 @@ const CROP_PAL: Record<string, [string, string]> = {
   "生菜": ["#4ade80", "#166534"],
   "茄子": ["#7c3aed", "#15803d"],
 };
+
+function cropEnvTint(crop: string) {
+  return getCropLightProfile(crop).color;
+}
 
 // ============================================================
 // 单株作物（叶 + 果实）
@@ -333,7 +341,7 @@ function CropPlant({ position, fruitColor, leafColor, ledOn, crop }: {
 // ============================================================
 // 补光灯灯条 (LED grow light)
 // ============================================================
-function GrowLight({ position, on }: { position: [number, number, number]; on: boolean }) {
+function GrowLight({ position, on, tint = "#fde68a" }: { position: [number, number, number]; on: boolean; tint?: string }) {
   return (
     <group position={position}>
       {/* 灯壳 */}
@@ -346,7 +354,7 @@ function GrowLight({ position, on }: { position: [number, number, number]; on: b
         <boxGeometry args={[1.45, 0.02, 0.18]} />
         <meshStandardMaterial
           color={on ? "#fef3c7" : "#374151"}
-          emissive={on ? "#fde047" : "#000000"}
+          emissive={on ? tint : "#000000"}
           emissiveIntensity={on ? 1.5 : 0}
         />
       </mesh>
@@ -357,7 +365,7 @@ function GrowLight({ position, on }: { position: [number, number, number]; on: b
           intensity={2.2}
           distance={5}
           decay={1.6}
-          color="#fde68a"
+          color={tint}
           castShadow
         />
       )}
@@ -905,30 +913,32 @@ function SceneDecorations() {
 // 主场景（在 Canvas 内）
 // ============================================================
 function Scene({
-  crop, ledOn, motorOn, waterOn, alert,
+  crop, ledOn, motorOn, waterOn, alert, isNight, lightTint,
 }: {
   crop: string;
   ledOn: boolean;
   motorOn: boolean;
   waterOn: boolean;
   alert: boolean;
+  isNight: boolean;
+  lightTint: string;
 }) {
+  const tint = lightTint;
   return (
     <>
-      {/* 环境光 — 整体增亮 */}
-      <ambientLight intensity={ledOn ? 1.6 : 1.3} />
-      {/* 主方向光（模拟阳光） */}
+      <ambientLight intensity={ledOn ? (isNight ? 1.35 : 1.6) : isNight ? 0.85 : 1.0} color={isNight ? "#bfdbfe" : "#ffffff"} />
       <directionalLight
         position={[5, 10, 6]}
-        intensity={2.0}
+        intensity={isNight ? 0.65 : 2.0}
+        color={isNight ? "#c7d2fe" : "#ffffff"}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      <directionalLight position={[-6, 8, -3]} intensity={0.9} color="#bee3f8" />
-      <directionalLight position={[0, 6, -6]} intensity={0.6} color="#fef3c7" />
-      {/* 半球光让暗部不至于死黑 */}
-      <hemisphereLight args={["#dbeafe", "#65a30d", 1.0]} />
+      <directionalLight position={[-6, 8, -3]} intensity={isNight ? 0.75 : 0.9} color="#bee3f8" />
+      <directionalLight position={[0, 6, -6]} intensity={isNight ? 0.35 : 0.6} color={isNight ? tint : "#fef3c7"} />
+      <hemisphereLight args={[isNight ? "#172554" : "#dbeafe", isNight ? "#14532d" : "#65a30d", isNight ? 0.75 : 1.0]} />
+      {isNight && <fog attach="fog" args={["#0f172a", 8, 24]} />}
 
       {/* 场景外部环境 */}
       <SceneDecorations />
@@ -940,9 +950,9 @@ function Scene({
       <CropField crop={crop} ledOn={ledOn} />
 
       {/* 3 排补光灯 */}
-      <GrowLight position={[-1.6, 1.8, 0]} on={ledOn} />
-      <GrowLight position={[0, 2.3, 0]} on={ledOn} />
-      <GrowLight position={[1.6, 1.8, 0]} on={ledOn} />
+      <GrowLight position={[-1.6, 1.8, 0]} on={ledOn} tint={tint} />
+      <GrowLight position={[0, 2.3, 0]} on={ledOn} tint={tint} />
+      <GrowLight position={[1.6, 1.8, 0]} on={ledOn} tint={tint} />
 
       {/* 后墙风扇（z = -W/2 端面） — 仅响应风扇电机指令(motorOn) */}
       <Fan position={[-1.2, 1.1, -2.75]} on={motorOn} />
@@ -970,7 +980,7 @@ function Scene({
 // 头部状态条
 // ============================================================
 function HeaderBar({
-  crop, connectionMode, ledOn, motorOn, waterOn, hasAlert,
+  crop, connectionMode, ledOn, motorOn, waterOn, hasAlert, lightTint, lightLabel,
 }: {
   crop: string;
   connectionMode: "live" | "waiting" | "offline";
@@ -978,6 +988,8 @@ function HeaderBar({
   motorOn: boolean;
   waterOn: boolean;
   hasAlert: boolean;
+  lightTint: string;
+  lightLabel: string;
 }) {
   const connLabel = connectionMode === "live" ? "实时" : connectionMode === "waiting" ? "等待" : "离线";
   const connClass =
@@ -1007,14 +1019,13 @@ function HeaderBar({
       </div>
       <div className="flex items-center gap-2">
         <span
-          className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
-            ledOn
-              ? "bg-yellow-900/50 border-yellow-600 text-yellow-300"
-              : "bg-gray-800/80 border-gray-600 text-gray-500"
-          }`}
+          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
+          style={ledOn
+            ? { backgroundColor: `${lightTint}22`, borderColor: `${lightTint}aa`, color: lightTint }
+            : { backgroundColor: "rgba(31,41,55,0.8)", borderColor: "#4b5563", color: "#6b7280" }}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${ledOn ? "bg-yellow-400" : "bg-gray-600"}`} />
-          补光灯 {ledOn ? "ON" : "OFF"}
+          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: ledOn ? lightTint : "#4b5563" }} />
+          {lightLabel} {ledOn ? "ON" : "OFF"}
         </span>
         <span
           className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
@@ -1089,7 +1100,7 @@ function DataPanel({ sv }: { sv: Partial<Record<SensorKey, number>> }) {
 // ============================================================
 // 导出主组件
 // ============================================================
-export function GreenhouseDigitalTwin3D({ sensorValues, connectionMode, crop, ledOn, motorOn, waterOn = false }: Props) {
+export function GreenhouseDigitalTwin3D({ sensorValues, connectionMode, crop, ledOn, motorOn, waterOn = false, isNight = false, lightTint, lightLabel }: Props) {
   const [, setTick] = useState(0);
   useEffect(() => {
     // 强制定期 re-render 以让 HeaderBar 中 ON/OFF 文字与勾选效果同步
@@ -1100,6 +1111,9 @@ export function GreenhouseDigitalTwin3D({ sensorValues, connectionMode, crop, le
   const KEYS: SensorKey[] = ["temp", "humidity", "light", "co2", "soilHumidity", "soilTemp"];
   const allOks = KEYS.map((k) => isOk(k, sensorValues[k])).filter((v) => v !== null);
   const hasAlert = allOks.some((v) => v === false);
+  const profile = getCropLightProfile(crop);
+  const effectiveLightTint = lightTint ?? profile.color;
+  const effectiveLightLabel = lightLabel ?? profile.label;
 
   return (
     <div
@@ -1107,7 +1121,9 @@ export function GreenhouseDigitalTwin3D({ sensorValues, connectionMode, crop, le
       style={{
         height: 600,
         boxShadow: "0 18px 44px rgba(15,23,42,0.16)",
-        background: "linear-gradient(160deg,#93c5fd 0%,#bfdbfe 42%,#86efac 100%)",
+        background: isNight
+          ? "linear-gradient(160deg,#020617 0%,#0f172a 45%,#064e3b 100%)"
+          : "linear-gradient(160deg,#93c5fd 0%,#bfdbfe 42%,#86efac 100%)",
       }}
     >
       <HeaderBar
@@ -1117,6 +1133,8 @@ export function GreenhouseDigitalTwin3D({ sensorValues, connectionMode, crop, le
         motorOn={motorOn}
         waterOn={waterOn}
         hasAlert={hasAlert}
+        lightTint={effectiveLightTint}
+        lightLabel={effectiveLightLabel}
       />
 
       <Canvas
@@ -1126,7 +1144,7 @@ export function GreenhouseDigitalTwin3D({ sensorValues, connectionMode, crop, le
         style={{ background: "transparent" }}
       >
         <Suspense fallback={<Html center><span style={{ color: "#22c55e" }}>加载 3D 场景中…</span></Html>}>
-          <Scene crop={crop} ledOn={ledOn} motorOn={motorOn} waterOn={waterOn} alert={hasAlert} />
+          <Scene crop={crop} ledOn={ledOn} motorOn={motorOn} waterOn={waterOn} alert={hasAlert} isNight={isNight} lightTint={effectiveLightTint} />
           <OrbitControls
             enablePan={false}
             minDistance={5}

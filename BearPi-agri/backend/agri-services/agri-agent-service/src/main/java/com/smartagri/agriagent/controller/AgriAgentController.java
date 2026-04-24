@@ -36,7 +36,7 @@ public class AgriAgentController {
 
     @PostMapping("/chat")
     public ApiResponse<AgriAgentChatResponse> chat(@Valid @RequestBody AgriAgentChatRequest request) {
-        String answer = cozeAgentService.chat(request).block();
+        String answer = cozeAgentService.chat(request.withoutFile()).block();
         return ApiResponse.success(new AgriAgentChatResponse(answer));
     }
 
@@ -55,8 +55,8 @@ public class AgriAgentController {
             @RequestParam(value = "userId", required = false) String userId,
             @RequestParam(value = "conversationId", required = false) String conversationId) {
         ImageStorageService.StoredImage stored = imageStorageService.store(image);
-        AgriAgentChatRequest request = new AgriAgentChatRequest(question, userId, conversationId);
-        return toEmitter(cozeAgentService.streamChatWithImage(request, stored.publicUrl()));
+        AgriAgentChatRequest request = new AgriAgentChatRequest(question, userId, conversationId, null, null);
+        return toEmitter(cozeAgentService.streamChatWithImageUrl(request, stored.publicUrl()));
     }
 
     @GetMapping("/uploads/{date}/{filename:.+}")
@@ -79,6 +79,7 @@ public class AgriAgentController {
                             case TOKEN -> emitter.send(SseEmitter.event().name("token").data(chunk.content()));
                             case THINKING -> emitter.send(SseEmitter.event().name("thinking").data(chunk.content()));
                             case CONTEXT -> emitter.send(SseEmitter.event().name("context").data(chunk.content()));
+                            case TOOL_RESULT -> emitter.send(SseEmitter.event().name("tool_result").data(chunk.content()));
                             case DONE -> {
                                 emitter.send(SseEmitter.event().name("done").data(chunk.content()));
                                 emitter.complete();

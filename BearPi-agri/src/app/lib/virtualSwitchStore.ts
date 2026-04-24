@@ -12,6 +12,7 @@ export type VirtualSwitch = {
   led: boolean;
   motor: boolean;
   water: boolean;
+  ledManualOverride?: boolean;
 };
 
 const STORAGE_KEY = "bearpi-agri:virtual-switches-v1";
@@ -42,6 +43,12 @@ function saveAll(map: VirtualSwitchMap) {
 
 export function getSwitch(name: string): VirtualSwitch {
   return loadAll()[name] ?? { led: false, motor: false, water: false };
+}
+
+export function getEffectiveLed(sw: VirtualSwitch | undefined, isNight: boolean): boolean {
+  if (!sw) return isNight;
+  if (isNight && !sw.ledManualOverride) return true;
+  return sw.led;
 }
 
 /** 覆盖式更新单个大棚的开关；合并到已有 map */

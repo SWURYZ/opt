@@ -27,17 +27,7 @@ public class ImageStorageService {
     private final AgriAgentUploadProperties properties;
 
     public StoredImage store(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要上传的图片");
-        }
-        if (file.getSize() > properties.getMaxSizeBytes()) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "图片不能超过10MB");
-        }
-
-        String detectedType = detectContentType(file);
-        if (!properties.getAllowedContentTypes().contains(detectedType)) {
-            throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "仅支持 JPG、PNG、WebP、GIF 图片");
-        }
+        String detectedType = validate(file);
 
         String date = LocalDate.now().format(DATE_DIR);
         String filename = UUID.randomUUID() + extensionFor(detectedType);
@@ -57,6 +47,21 @@ public class ImageStorageService {
 
         String publicUrl = publicUrl(date, filename);
         return new StoredImage(date, filename, target, publicUrl, detectedType, file.getSize());
+    }
+
+    public String validate(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要上传的图片");
+        }
+        if (file.getSize() > properties.getMaxSizeBytes()) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "图片不能超过10MB");
+        }
+
+        String detectedType = detectContentType(file);
+        if (!properties.getAllowedContentTypes().contains(detectedType)) {
+            throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "仅支持 JPG、PNG、WebP、GIF 图片");
+        }
+        return detectedType;
     }
 
     public Path resolveUpload(String date, String filename) {

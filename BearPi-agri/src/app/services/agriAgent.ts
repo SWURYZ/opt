@@ -4,7 +4,6 @@ export interface AgriAgentChatRequest {
   question: string;
   userId?: string;
   conversationId?: string;
-  fileId?: string;
 }
 
 interface StreamEvent {

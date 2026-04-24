@@ -13,7 +13,8 @@ import { GreenhouseDigitalTwin } from "../components/GreenhouseDigitalTwin3D";
 import { ScheduleRulesModal, ThresholdRulesModal, AlertRecordsModal } from "../components/GreenhousePanels";
 import { FarmDigitalTwin3D, type FarmGreenhouse } from "../components/FarmDigitalTwin3D";
 import { useGreenhouses, CROP_OPTIONS, LOCKED_NAME, MAX_GREENHOUSES } from "../lib/greenhouseStore";
-import { useVirtualSwitches, type VirtualSwitch } from "../lib/virtualSwitchStore";
+import { useVirtualSwitches, getEffectiveLed, type VirtualSwitch } from "../lib/virtualSwitchStore";
+import { getCropLightProfile } from "../lib/cropLightProfiles";
 
 // Crop colors [fruit, leaf] for mini card plants
 const CROP_COLORS: Record<string, [string, string]> = {
@@ -363,11 +364,18 @@ export function RealtimeMonitor() {
     [ghList],
   );
   const [manageOpen, setManageOpen] = useState(false);
+  const [timeTick, setTimeTick] = useState(() => Date.now());
+  const isNight = useMemo(() => {
+    const hour = new Date(timeTick).getHours();
+    return hour >= 18 || hour < 6;
+  }, [timeTick]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setTimeTick(Date.now()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // ── 本地持久化 key (切换页面/刷新后保留状态) ──
   const LS_FOCUSED = "bearpi:monitor:focusedGH";
-  const LS_VIRTUAL = "bearpi:monitor:virtualSwitches";
-  const LS_WATER = "bearpi:monitor:waterOn";
   type VirtualSwitch = { led: boolean; motor: boolean; water: boolean };
   const loadLS = <T,>(key: string, fallback: T): T => {
     try {
@@ -382,8 +390,9 @@ export function RealtimeMonitor() {
   const [sensorValues, setSensorValues] = useState<Partial<Record<SensorKey, number>>>(emptySensorValues);
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("waiting");
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [ledOn, setLedOn] = useState(false);
+  const [ledOn, setLedOn] = useState(isNight);
   const [motorOn, setMotorOn] = useState(false);
+  const waterOn = motorOn;
   const [ledLoading, setLedLoading] = useState(false);
   const [motorLoading, setMotorLoading] = useState(false);
   const [waterLoading, setWaterLoading] = useState(false);
@@ -392,9 +401,14 @@ export function RealtimeMonitor() {
   // 待确认目标值 — 用户点击后立即写入,轮询只接受与目标值一致的状态
   // 这样可以避免设备执行慢时,旧的 "ON" 状态把刚切换的 "OFF" 覆盖回去
   const ledPendingTargetRef = useRef<boolean | null>(null);
+  const ledManualOverrideRef = useRef(false);
   const motorPendingTargetRef = useRef<boolean | null>(null);
-  // 1 号大棚浇水(虚拟) — 持久化
-  const [waterOn, setWaterOn] = useState(() => loadLS<boolean>(LS_WATER, false));
+  useEffect(() => {
+    if (isNight && ledPendingTargetRef.current === null && !ledManualOverrideRef.current) {
+      setLedOn(true);
+    }
+  }, [isNight]);
+
   // 其他大棚的虚拟设备状态 — 通过共享 store (跨组件, 包含芽芽自动播报写入, 内部已持久化)
   const [virtualSwitchMap, updateVirtualSwitch] = useVirtualSwitches();
   const virtualSwitches = useMemo<Record<string, VirtualSwitch>>(() => {
@@ -412,11 +426,12 @@ export function RealtimeMonitor() {
       else localStorage.removeItem(LS_FOCUSED);
     } catch { /* ignore quota */ }
   }, [focusedGH]);
-  useEffect(() => {
-    try { localStorage.setItem(LS_WATER, JSON.stringify(waterOn)); } catch { /* ignore */ }
-  }, [waterOn]);
   function toggleVirtual(gh: string, key: keyof VirtualSwitch) {
     const cur = virtualSwitches[gh] ?? { led: false, motor: false, water: false };
+    if (key === "led") {
+      updateVirtualSwitch(gh, { led: !getEffectiveLed(cur, isNight), ledManualOverride: isNight });
+      return;
+    }
     updateVirtualSwitch(gh, { [key]: !cur[key] });
   }
 
@@ -527,10 +542,9 @@ export function RealtimeMonitor() {
         if (!disposed && status) {
           if (status.led) {
             const real = status.led === "ON";
-            // 有待确认目标:只在状态匹配目标时才接受并清除 pending
-            // 否则保持本地乐观值不变,避免覆盖用户刚刚的操作
+            const display = isNight && !ledManualOverrideRef.current ? true : real;
             if (ledPendingTargetRef.current === null) {
-              setLedOn(real);
+              setLedOn(display);
             } else if (ledPendingTargetRef.current === real) {
               setLedOn(real);
               ledPendingTargetRef.current = null;
@@ -541,12 +555,11 @@ export function RealtimeMonitor() {
             const real = status.motor === "ON";
             if (motorPendingTargetRef.current === null) {
               setMotorOn(real);
-              if (!real) setWaterOn(false); // 硬件电机关闭时, 水泵场景也强制停止
             } else if (motorPendingTargetRef.current === real) {
               setMotorOn(real);
-              if (!real) setWaterOn(false);
               motorPendingTargetRef.current = null;
               setMotorLoading(false);
+              setWaterLoading(false);
             }
           }
         }
@@ -558,7 +571,7 @@ export function RealtimeMonitor() {
       if (deviceId) pollStatus(deviceId);
     }, 2000);
     return () => { disposed = true; if (pollTimer !== null) clearInterval(pollTimer); };
-  }, [deviceId]);
+  }, [deviceId, isNight]);
 
   // 自动清除提示
   useEffect(() => {
@@ -578,6 +591,7 @@ export function RealtimeMonitor() {
     }
     const target = !ledOn;
     setLedLoading(true);
+    ledManualOverrideRef.current = isNight;
     ledPendingTargetRef.current = target;
     setLedOn(target); // 乐观更新
     try {
@@ -659,30 +673,30 @@ export function RealtimeMonitor() {
   }
 
   // 浇水控制
-  // · 1号大棚: 与风扇共用 MOTOR_CONTROL 硬件 — 下发真实指令
-  // · 虚拟场景中 waterOn 与 motorOn 独立显示 (分别控制水泵动画与风扇动画)
+  // · 1号大棚: 与风扇共用 MOTOR_CONTROL 硬件,实况水泵状态严格跟随 motorStatus
+  // · 虚拟场景中 waterOn 与 motorOn 独立显示
   async function toggleWater() {
     if (!deviceId) {
       setControlMessage({ type: "error", text: "未绑定设备,请先在【设备登记】扫码绑定" });
       return;
     }
-    if (motorLoading) return;
-    const target = !waterOn;
+    if (motorLoading || waterLoading) return;
+    const target = !motorOn;
     setWaterLoading(true);
     motorPendingTargetRef.current = target;
-    setWaterOn(target); // 只设置水泵状态, 风扇保持独立
+    setMotorOn(target);
     try {
       const resp = await sendManualControl({ deviceId, commandType: "MOTOR_CONTROL", action: target ? "ON" : "OFF" });
       const ok = resp.status === "SENT" || resp.status === "DELIVERED";
       if (ok) {
-        setControlMessage({ type: "success", text: `浇水指令已下发: ${target ? "ON" : "OFF"}` });
+        setControlMessage({ type: "success", text: `浇水/电机指令已下发: ${target ? "ON" : "OFF"}` });
         window.setTimeout(async () => {
           try {
             const realtime = await fetchRealtimeDeviceStatus(deviceId);
             if (realtime?.motor) {
               const real = realtime.motor === "ON";
               if (real === target) {
-                setWaterOn(real);
+                setMotorOn(real);
                 motorPendingTargetRef.current = null;
               }
             }
@@ -718,9 +732,11 @@ export function RealtimeMonitor() {
     const vs = virtualSwitches[focusedGH] ?? { led: false, motor: false, water: false };
     // 1号大棚:补光灯/风扇用真实设备状态;浇水用虚拟
     // 其他大棚:三个开关全部虚拟
-    const ghLedOn = isOnline ? ledOn : vs.led;
+    const ghLedOn = isOnline ? ledOn : getEffectiveLed(vs, isNight);
     const ghMotorOn = isOnline ? motorOn : vs.motor;
     const ghWaterOn = isOnline ? waterOn : vs.water;
+    const crop = GREENHOUSE_CROPS[focusedGH] ?? "番茄";
+    const lightProfile = getCropLightProfile(crop);
 
     return (
       <div className="p-6 space-y-4">
@@ -735,8 +751,11 @@ export function RealtimeMonitor() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-gray-700">{focusedGH}</span>
             <span className="text-sm font-medium text-gray-500">·</span>
-            <span className="text-sm font-semibold" style={{ color: CROP_COLORS[GREENHOUSE_CROPS[focusedGH] ?? "番茄"]?.[0] ?? "#ef4444" }}>
-              {GREENHOUSE_CROPS[focusedGH] ?? ""}
+            <span className="text-sm font-semibold" style={{ color: CROP_COLORS[crop]?.[0] ?? "#ef4444" }}>
+              {crop}
+            </span>
+            <span className="text-xs font-medium px-2 py-1 rounded-lg border" style={{ color: lightProfile.color, borderColor: `${lightProfile.color}55`, backgroundColor: `${lightProfile.color}14` }}>
+              夜间{lightProfile.label}
             </span>
             <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border ${connClass}`}>
               <Wifi className={`w-3 h-3 ${connectionMode === "live" ? "animate-pulse" : ""}`} />
@@ -755,13 +774,14 @@ export function RealtimeMonitor() {
               disabled={isOnline && (ledLoading || !deviceId)}
               className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-all ${
                 ghLedOn
-                  ? "bg-amber-50 border-amber-300 text-amber-700 shadow-[0_0_8px_rgba(251,191,36,0.4)]"
+                  ? "bg-amber-50 border-amber-300 text-amber-700"
                   : "bg-gray-50 border-gray-200 text-gray-500 hover:border-amber-200"
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isOnline ? (!deviceId ? "未绑定设备" : ghLedOn ? "点击关闭补光灯" : "点击开启补光灯") : "虚拟模拟开关"}
+              style={ghLedOn ? { boxShadow: `0 0 8px ${lightProfile.color}66` } : undefined}
+              title={isOnline ? (!deviceId ? "未绑定设备" : ghLedOn ? `点击关闭${lightProfile.label}` : `点击开启${lightProfile.label}`) : "虚拟模拟开关"}
             >
               {isOnline && ledLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Lightbulb className="w-3 h-3" />}
-              补光灯 {ghLedOn ? "ON" : "OFF"}
+              {isNight ? `${lightProfile.label} ${ghLedOn ? "ON" : "OFF"}` : `补光灯 ${ghLedOn ? "ON" : "OFF"}`}
             </button>
 
             <button
@@ -796,10 +816,13 @@ export function RealtimeMonitor() {
         <GreenhouseDigitalTwin
           sensorValues={ghSV}
           connectionMode={ghConn}
-          crop={GREENHOUSE_CROPS[focusedGH] ?? "番茄"}
+          crop={crop}
           ledOn={ghLedOn}
           motorOn={ghMotorOn}
           waterOn={ghWaterOn}
+          lightTint={lightProfile.color}
+          lightLabel={lightProfile.label}
+          isNight={isNight}
         />
 
         {/* 测量数据下方 — 定时规则 / 安全范围 / 提醒记录 入口按钮 */}
@@ -921,17 +944,22 @@ export function RealtimeMonitor() {
         greenhouses={GREENHOUSE_LIST.map<FarmGreenhouse>((gh) => {
           const isOnline = gh === ONLINE_GREENHOUSE;
           const vs = virtualSwitches[gh] ?? { led: false, motor: false, water: false };
+          const crop = GREENHOUSE_CROPS[gh] ?? "番茄";
+          const lightProfile = getCropLightProfile(crop);
           return {
             name: gh,
-            crop: GREENHOUSE_CROPS[gh] ?? "番茄",
-            ledOn: isOnline ? ledOn : vs.led,
+            crop,
+            ledOn: isOnline ? ledOn : getEffectiveLed(vs, isNight),
             motorOn: isOnline ? motorOn : vs.motor,
             waterOn: isOnline ? waterOn : vs.water,
+            lightTint: lightProfile.color,
+            lightLabel: lightProfile.label,
             connectionMode: isOnline ? connectionMode : "waiting",
             hasAlert: false,
           };
         })}
         onSelect={(name) => setFocusedGH(name)}
+        isNight={isNight}
       />
 
       {/* 管理大棚对话框 */}

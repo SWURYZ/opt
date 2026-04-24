@@ -11,6 +11,7 @@ import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { getCropLightProfile } from "../lib/cropLightProfiles";
 
 const CROP_PAL: Record<string, [string, string]> = {
   "番茄": ["#ef4444", "#16a34a"],
@@ -20,6 +21,10 @@ const CROP_PAL: Record<string, [string, string]> = {
   "生菜": ["#4ade80", "#166534"],
   "茄子": ["#7c3aed", "#15803d"],
 };
+
+function cropEnvTint(crop: string) {
+  return getCropLightProfile(crop).color;
+}
 
 /** 基于 (x,z) 的稳定伪随机，避免同种作物排成"复印件" */
 function seeded(x: number, z: number, salt = 0): number {
@@ -36,6 +41,8 @@ export interface FarmGreenhouse {
   motorOn: boolean;
   /** 虚拟浇水开关，未传入时默认跟随 motorOn */
   waterOn?: boolean;
+  lightTint?: string;
+  lightLabel?: string;
   connectionMode: ConnMode;
   hasAlert?: boolean;
 }
@@ -43,6 +50,7 @@ export interface FarmGreenhouse {
 interface Props {
   greenhouses: FarmGreenhouse[];
   onSelect: (name: string) => void;
+  isNight?: boolean;
 }
 
 // ============================================================
@@ -417,6 +425,7 @@ function MiniGreenhouse({
   position,
   data,
   hovered,
+  isNight,
   onPointerOver,
   onPointerOut,
   onClick,
@@ -424,6 +433,7 @@ function MiniGreenhouse({
   position: [number, number, number];
   data: FarmGreenhouse;
   hovered: boolean;
+  isNight: boolean;
   onPointerOver: (e: ThreeEvent<PointerEvent>) => void;
   onPointerOut: (e: ThreeEvent<PointerEvent>) => void;
   onClick: (e: ThreeEvent<MouseEvent>) => void;
@@ -454,10 +464,11 @@ function MiniGreenhouse({
 
   const offline = data.connectionMode === "offline";
   const alert = !!data.hasAlert;
-  const glassColor = alert ? "#7f1d1d" : offline ? "#475569" : "#7dd3fc";
+  const cropTint = data.lightTint ?? cropEnvTint(data.crop);
+  const glassColor = alert ? "#7f1d1d" : offline ? "#475569" : isNight ? cropTint : "#7dd3fc";
   const baseEmissive = hovered ? "#22c55e" : "#000000";
-  const frameColor = offline ? "#64748b" : "#cbd5e1";
-  const soilColor = pumpOn ? "#3f2414" : "#5a2f17";
+  const frameColor = offline ? "#64748b" : isNight ? "#cbd5e1" : "#cbd5e1";
+  const soilColor = pumpOn ? "#3f2414" : isNight ? "#3b2417" : "#5a2f17";
 
   return (
     <group
@@ -509,7 +520,7 @@ function MiniGreenhouse({
           roughness={0.28}
           metalness={0.02}
           side={THREE.DoubleSide}
-          emissive={data.ledOn ? "#facc15" : alert ? "#ef4444" : "#000000"}
+          emissive={data.ledOn ? cropTint : alert ? "#ef4444" : "#000000"}
           emissiveIntensity={data.ledOn ? 0.42 : alert ? 0.16 : 0}
         />
       </mesh>
@@ -613,7 +624,7 @@ function MiniGreenhouse({
         <sphereGeometry args={[0.07, 12, 12]} />
         <meshStandardMaterial
           color={data.ledOn ? "#fef9c3" : "#1f2937"}
-          emissive={data.ledOn ? "#fde047" : "#000000"}
+          emissive={data.ledOn ? cropTint : "#000000"}
           emissiveIntensity={data.ledOn ? 3.0 : 0}
           toneMapped={false}
         />
@@ -626,21 +637,21 @@ function MiniGreenhouse({
             intensity={1.6}
             distance={2.2}
             decay={1.4}
-            color="#fde68a"
+            color={cropTint}
           />
           {/* 顶部光晕圆环 */}
           <mesh position={[0, R + 0.4, 0]}>
             <sphereGeometry args={[0.18, 16, 16]} />
-            <meshBasicMaterial color="#fde047" transparent opacity={0.35} toneMapped={false} />
+            <meshBasicMaterial color={cropTint} transparent opacity={0.35} toneMapped={false} />
           </mesh>
           {/* 地面暖光与棚内光幕 */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.116, 0]}>
             <circleGeometry args={[D * 0.6, 28]} />
-            <meshBasicMaterial color="#fde047" transparent opacity={0.24} />
+            <meshBasicMaterial color={cropTint} transparent opacity={0.24} />
           </mesh>
           <mesh position={[0, 0.34, 0]}>
             <boxGeometry args={[D * 0.76, 0.38, W * 0.72]} />
-            <meshBasicMaterial color="#fde68a" transparent opacity={0.055} depthWrite={false} />
+            <meshBasicMaterial color={cropTint} transparent opacity={0.055} depthWrite={false} />
           </mesh>
         </>
       )}
@@ -793,7 +804,7 @@ function MiniGreenhouse({
         >
           <span>{data.name} · {data.crop}</span>
           {data.ledOn && (
-            <span style={{ color: "#fde047", textShadow: "0 0 4px #fde047" }}>☀</span>
+            <span style={{ color: cropTint, textShadow: `0 0 4px ${cropTint}` }} title={data.lightLabel ?? "补光灯"}>☀</span>
           )}
           {data.motorOn && (
             <span style={{ color: "#60a5fa", textShadow: "0 0 4px #60a5fa" }}>❇</span>
@@ -1186,6 +1197,7 @@ export interface WeatherSceneParams {
   fogNear: number;
   fogFar: number;
   fogColor: string;
+  isNight: boolean;
 }
 function classifyWeather(text: string | undefined): WeatherKind {
   if (!text) return "sunny";
@@ -1206,60 +1218,92 @@ function rainIntensity(text: string | undefined): number {
   if (/小雨|小雪|阵雨|阵雪|毛毛/.test(text)) return 0.4;
   return 0.55;
 }
-function weatherSceneParams(text: string | undefined): WeatherSceneParams {
+function applyTimeOfDay(params: WeatherSceneParams, isNight: boolean): WeatherSceneParams {
+  if (!isNight) return { ...params, isNight: false };
+  return {
+    ...params,
+    isNight: true,
+    skyColor: params.kind === "storm" ? "#111827" : "#0f172a",
+    sunOpacity: 0,
+    lightScale: Math.min(params.lightScale * 0.45, 0.38),
+    cloudColor: params.kind === "storm" || params.kind === "rain" ? "#334155" : "#475569",
+    fogEnabled: true,
+    fogNear: Math.min(params.fogNear, 12),
+    fogFar: Math.min(params.fogFar, 42),
+    fogColor: params.kind === "fog" ? "#334155" : "#1e293b",
+  };
+}
+
+function weatherSceneParams(text: string | undefined, isNight = false): WeatherSceneParams {
   const kind = classifyWeather(text);
   const intensity = kind === "rain" || kind === "storm" || kind === "snow" ? rainIntensity(text) : 0;
+  let params: WeatherSceneParams;
   switch (kind) {
     case "sunny":
-      return {
+      params = {
         kind, intensity: 0,
         skyColor: "#87ceeb", sunOpacity: 1, lightScale: 1,
         cloudCount: 1, cloudColor: "#ffffff",
         fogEnabled: false, fogNear: 20, fogFar: 60, fogColor: "#bfdbfe",
+        isNight: false,
       };
+      break;
     case "cloudy":
-      return {
+      params = {
         kind, intensity: 0,
         skyColor: "#a7c8e0", sunOpacity: 0.7, lightScale: 0.85,
         cloudCount: 4, cloudColor: "#f8fafc",
         fogEnabled: false, fogNear: 20, fogFar: 60, fogColor: "#cbd5e1",
+        isNight: false,
       };
+      break;
     case "overcast":
-      return {
+      params = {
         kind, intensity: 0,
         skyColor: "#8a9aab", sunOpacity: 0.15, lightScale: 0.55,
         cloudCount: 7, cloudColor: "#cbd5e1",
         fogEnabled: true, fogNear: 18, fogFar: 55, fogColor: "#94a3b8",
+        isNight: false,
       };
+      break;
     case "rain":
-      return {
+      params = {
         kind, intensity,
         skyColor: "#6b7785", sunOpacity: 0, lightScale: 0.45,
         cloudCount: 8, cloudColor: "#94a3b8",
         fogEnabled: true, fogNear: 14, fogFar: 48, fogColor: "#7a8895",
+        isNight: false,
       };
+      break;
     case "storm":
-      return {
+      params = {
         kind, intensity,
         skyColor: "#475569", sunOpacity: 0, lightScale: 0.3,
         cloudCount: 9, cloudColor: "#64748b",
         fogEnabled: true, fogNear: 10, fogFar: 40, fogColor: "#64748b",
+        isNight: false,
       };
+      break;
     case "snow":
-      return {
+      params = {
         kind, intensity,
         skyColor: "#c9d4de", sunOpacity: 0.25, lightScale: 0.75,
         cloudCount: 7, cloudColor: "#f1f5f9",
         fogEnabled: true, fogNear: 16, fogFar: 52, fogColor: "#e2e8f0",
+        isNight: false,
       };
+      break;
     case "fog":
-      return {
+      params = {
         kind, intensity: 0,
         skyColor: "#b8c0c8", sunOpacity: 0.1, lightScale: 0.5,
         cloudCount: 3, cloudColor: "#d1d5db",
         fogEnabled: true, fogNear: 6, fogFar: 28, fogColor: "#cbd5e1",
+        isNight: false,
       };
+      break;
   }
+  return applyTimeOfDay(params, isNight);
 }
 
 // 共享的实时天气 Hook：1 小时刷新一次；同时对外暴露 daily / error
@@ -1412,6 +1456,24 @@ function SkyAndDistance({ params }: { params: WeatherSceneParams }) {
       <Mountain position={[0, 0, -8.5]} scale={2.4} color={mkColor("#334155")} />
       <Mountain position={[5, 0, -8]} scale={2.0} color={mkColor("#475569")} />
       <Mountain position={[9, 0, -7]} scale={1.6} color={mkColor("#64748b")} />
+      {/* 云朵：数量由天气决定 */}
+      {params.isNight && (
+        <>
+          {[
+            [-13, 14, -11], [-8, 11, -13], [-3, 13, -12], [2, 12, -14], [7, 13, -11], [12, 10, -13],
+            [-10, 9, 8], [-4, 12, 10], [4, 10, 9], [10, 12, 7],
+          ].map((p, i) => (
+            <mesh key={`star-${i}`} position={p as [number, number, number]}>
+              <sphereGeometry args={[0.045, 6, 6]} />
+              <meshBasicMaterial color="#e0f2fe" transparent opacity={0.75} toneMapped={false} />
+            </mesh>
+          ))}
+          <mesh position={[-10, 12, -8]}>
+            <sphereGeometry args={[0.45, 18, 18]} />
+            <meshBasicMaterial color="#e0f2fe" transparent opacity={0.88} toneMapped={false} />
+          </mesh>
+        </>
+      )}
       {/* 云朵：数量由天气决定 */}
       {cloudPool.slice(0, params.cloudCount).map((p, i) => (
         <Cloud key={i} position={p} color={params.cloudColor} />
@@ -1605,10 +1667,10 @@ function FarmScene({
 
   return (
     <>
-      <ambientLight intensity={0.75 * weatherParams.lightScale + 0.18} />
-      <directionalLight position={[6, 10, 6]} intensity={1.7 * weatherParams.lightScale} color="#fff7ed" />
-      <directionalLight position={[-7, 5, -5]} intensity={0.45 * weatherParams.lightScale} color="#bfdbfe" />
-      <hemisphereLight args={["#dbeafe", "#4d7c0f", 0.85 * weatherParams.lightScale + 0.2]} />
+      <ambientLight intensity={(weatherParams.isNight ? 0.28 : 0.75) * weatherParams.lightScale + (weatherParams.isNight ? 0.12 : 0.18)} />
+      <directionalLight position={[6, 10, 6]} intensity={(weatherParams.isNight ? 0.45 : 1.7) * weatherParams.lightScale} color={weatherParams.isNight ? "#bfdbfe" : "#fff7ed"} />
+      <directionalLight position={[-7, 5, -5]} intensity={(weatherParams.isNight ? 0.8 : 0.45) * weatherParams.lightScale} color="#bfdbfe" />
+      <hemisphereLight args={[weatherParams.isNight ? "#172554" : "#dbeafe", "#4d7c0f", (weatherParams.isNight ? 0.45 : 0.85) * weatherParams.lightScale + 0.2]} />
       {weatherParams.fogEnabled && (
         <fog attach="fog" args={[weatherParams.fogColor, weatherParams.fogNear, weatherParams.fogFar]} />
       )}
@@ -1641,6 +1703,7 @@ function FarmScene({
             position={[x, 0.04, z]}
             data={g}
             hovered={hoveredName === g.name}
+            isNight={weatherParams.isNight}
             onPointerOver={() => setHoveredName(g.name)}
             onPointerOut={() => setHoveredName(null)}
             onClick={() => onSelect(g.name)}
@@ -1656,7 +1719,7 @@ function FarmScene({
 // ============================================================
 // Export
 // ============================================================
-export function FarmDigitalTwin3D({ greenhouses, onSelect }: Props) {
+export function FarmDigitalTwin3D({ greenhouses, onSelect, isNight = false }: Props) {
   const [hoveredName, setHoveredName] = useState<string | null>(null);
   // 默认关闭手势控制，由用户手动开启
   const [gestureMode, setGestureMode] = useState(false);
@@ -1664,8 +1727,8 @@ export function FarmDigitalTwin3D({ greenhouses, onSelect }: Props) {
   // 实时天气：驱动 3D 场景的天空 / 云朵 / 雨雪 / 光照
   const { daily: weatherDaily, error: weatherError } = useQWeatherDaily();
   const weatherParams = useMemo(
-    () => weatherSceneParams(weatherDaily?.[0]?.textDay),
-    [weatherDaily]
+    () => weatherSceneParams(isNight ? weatherDaily?.[0]?.textNight : weatherDaily?.[0]?.textDay, isNight),
+    [weatherDaily, isNight]
   );
   const orbitRef = useRef<OrbitControlsImpl | null>(null);
   const initialCamPos = useRef<[number, number, number]>([14, 10, 14]);

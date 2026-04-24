@@ -16,7 +16,7 @@ springdoc:
 agri-agent:
   uploads:
     dir: ${AGRI_AGENT_UPLOAD_DIR:data/agri-agent/uploads}
-    public-base-url: ${AGRI_AGENT_PUBLIC_BASE_URL:http://139.155.96.142:8085}
+    public-base-url: ${AGRI_AGENT_PUBLIC_BASE_URL:http://139.155.96.142}
     public-path: ${AGRI_AGENT_UPLOAD_PUBLIC_PATH:/api/v1/agri-agent/uploads}
     max-size-bytes: ${AGRI_AGENT_UPLOAD_MAX_SIZE_BYTES:10485760}
     allowed-content-types:

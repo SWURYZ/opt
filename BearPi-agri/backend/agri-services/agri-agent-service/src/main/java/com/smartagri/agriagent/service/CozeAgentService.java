@@ -6,10 +6,15 @@ import com.smartagri.agriagent.config.CozeApiProperties;
 import com.smartagri.agriagent.dto.AgriAgentChatRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -34,14 +39,18 @@ public class CozeAgentService {
     private final ObjectMapper objectMapper;
 
     public Flux<AgentChunk> streamChat(AgriAgentChatRequest request) {
-        return streamChat(request, null);
+        return streamChatInternal(request.withoutFile());
     }
 
-    public Flux<AgentChunk> streamChatWithImage(AgriAgentChatRequest request, String imageUrl) {
-        return streamChat(request, imageUrl);
+    public Flux<AgentChunk> streamChatWithImage(AgriAgentChatRequest request, String fileId) {
+        return streamChatInternal(new AgriAgentChatRequest(request.question(), request.userId(), request.conversationId(), fileId, null));
     }
 
-    private Flux<AgentChunk> streamChat(AgriAgentChatRequest request, String imageUrl) {
+    public Flux<AgentChunk> streamChatWithImageUrl(AgriAgentChatRequest request, String imageUrl) {
+        return streamChatInternal(request.withImageUrl(imageUrl));
+    }
+
+    private Flux<AgentChunk> streamChatInternal(AgriAgentChatRequest request) {
         validateConfig();
 
         WebClient webClient = WebClient.builder()
@@ -56,7 +65,7 @@ public class CozeAgentService {
 
         return webClient.post()
                 .uri(properties.getChatPath())
-                .bodyValue(buildPayload(request, imageUrl))
+                .bodyValue(buildPayload(request))
                 .retrieve()
                 .bodyToFlux(SSE_STRING_TYPE)
                 .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
@@ -72,7 +81,7 @@ public class CozeAgentService {
                 .map(StringBuilder::toString);
     }
 
-    private Map<String, Object> buildPayload(AgriAgentChatRequest request, String imageUrl) {
+    private Map<String, Object> buildPayload(AgriAgentChatRequest request) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("bot_id", properties.getBotId());
         payload.put("user_id",
@@ -84,22 +93,106 @@ public class CozeAgentService {
             payload.put("conversation_id", request.conversationId());
         }
 
-        String content = request.question();
-        if (StringUtils.hasText(imageUrl)) {
+        if (StringUtils.hasText(request.imageUrl())) {
             try {
-                content = objectMapper.writeValueAsString(Map.of("text", request.question(), "url", imageUrl));
+                payload.put("additional_messages", List.of(
+                        Map.of(
+                                "role", "user",
+                                "content", objectMapper.writeValueAsString(Map.of(
+                                        "text", request.question(),
+                                        "url", request.imageUrl())),
+                                "content_type", "text")));
             } catch (IOException err) {
                 throw new IllegalStateException("failed to build image question payload", err);
             }
+        } else if (StringUtils.hasText(request.fileId())) {
+            List<Map<String, String>> parts = List.of(
+                    Map.of("type", "text", "text", request.question()),
+                    Map.of("type", "image", "file_id", request.fileId()));
+            try {
+                payload.put("additional_messages", List.of(
+                        Map.of(
+                                "role", "user",
+                                "content", objectMapper.writeValueAsString(parts),
+                                "content_type", "object_string")));
+            } catch (IOException err) {
+                throw new IllegalStateException("failed to build image question payload", err);
+            }
+        } else {
+            payload.put("additional_messages", List.of(
+                    Map.of(
+                            "role", "user",
+                            "content", request.question(),
+                            "content_type", "text")));
         }
 
-        payload.put("additional_messages", List.of(
-                Map.of(
-                        "role", "user",
-                        "content", content,
-                        "content_type", "text")));
-
         return payload;
+    }
+
+    public String uploadFile(MultipartFile file) {
+        validateConfig();
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("上传文件不能为空");
+        }
+
+        WebClient webClient = WebClient.builder()
+                .baseUrl(properties.getBaseUrl())
+                .codecs(cfg -> cfg.defaultCodecs().maxInMemorySize(20 * 1024 * 1024))
+                .defaultHeaders(headers -> headers.setBearerAuth(properties.getPat()))
+                .build();
+
+        MultipartBodyBuilder builder = new MultipartBodyBuilder();
+        ByteArrayResource resource = new ByteArrayResource(readAllBytes(file)) {
+            @Override
+            public String getFilename() {
+                String name = file.getOriginalFilename();
+                return StringUtils.hasText(name) ? name : "upload.bin";
+            }
+        };
+        MediaType mediaType = StringUtils.hasText(file.getContentType())
+                ? MediaType.parseMediaType(file.getContentType())
+                : MediaType.APPLICATION_OCTET_STREAM;
+        builder.part("file", resource).contentType(mediaType);
+        MultiValueMap<String, HttpEntity<?>> body = builder.build();
+
+        String response = webClient.post()
+                .uri("/v1/files/upload")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(Math.max(properties.getTimeoutSeconds(), 30)))
+                .block();
+
+        if (!StringUtils.hasText(response)) {
+            throw new IllegalStateException("Coze 文件上传响应为空");
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(response);
+            int code = root.path("code").asInt(-1);
+            if (code != 0) {
+                String msg = root.path("msg").asText("文件上传失败");
+                throw new IllegalStateException("Coze 文件上传失败: " + msg);
+            }
+            String fileId = root.path("data").path("id").asText(null);
+            if (!StringUtils.hasText(fileId)) {
+                throw new IllegalStateException("Coze 文件上传未返回 file_id: " + response);
+            }
+            return fileId;
+        } catch (IllegalStateException err) {
+            throw err;
+        } catch (Exception err) {
+            throw new IllegalStateException("解析 Coze 文件上传响应失败: " + response, err);
+        }
+    }
+
+    private byte[] readAllBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException err) {
+            throw new IllegalStateException("读取上传文件失败", err);
+        }
     }
 
     private Flux<AgentChunk> parseSseEvent(ServerSentEvent<String> event) {
@@ -113,16 +206,9 @@ public class CozeAgentService {
                 if (lowerEventName.contains("chat.completed")) {
                     return Flux.just(AgentChunk.context(conversationId), AgentChunk.done());
                 }
-                if (lowerEventName.contains("message.completed")) {
-                    return Flux.just(AgentChunk.context(conversationId));
-                }
             }
         }
 
-        // Skip conversation.message.completed to avoid duplicating streamed tokens
-        if (lowerEventName.contains("message.completed")) {
-            return Flux.empty();
-        }
         // conversation.chat.completed signals end of stream
         if (lowerEventName.contains("chat.completed")) {
             return Flux.just(AgentChunk.done());
@@ -176,14 +262,18 @@ public class CozeAgentService {
         String nodeType = textNode(node, "/type");
         String lowerNodeType = StringUtils.hasText(nodeType) ? nodeType.toLowerCase() : "";
 
-        if (lowerNodeType.contains("completed") || lowerNodeType.contains("finish")) {
-            addChunk(chunks, AgentChunk.done());
-            return chunks;
-        }
-
         boolean isReasoningType = "reasoning".equals(lowerNodeType)
                 || "thinking".equals(lowerNodeType)
                 || "verbose".equals(lowerNodeType);
+
+        String toolResult = extractToolResult(node, lowerNodeType);
+        if (StringUtils.hasText(toolResult)) {
+            addChunk(chunks, AgentChunk.toolResult(fixPossibleMojibake(toolResult)));
+        }
+
+        if (lowerNodeType.contains("completed") || lowerNodeType.contains("finish")) {
+            return chunks;
+        }
 
         String reasoning = firstNonBlank(
                 textNode(node, "/reasoning_content"),
@@ -246,7 +336,6 @@ public class CozeAgentService {
         if (StringUtils.hasText(eventType)) {
             String lowerType = eventType.toLowerCase();
             if (lowerType.contains("completed") || lowerType.contains("finish")) {
-                addChunk(chunks, AgentChunk.done());
                 return chunks;
             }
             if (lowerType.contains("reasoning") || lowerType.contains("thinking")) {
@@ -298,6 +387,44 @@ public class CozeAgentService {
         }
 
         return chunks;
+    }
+
+    private String extractToolResult(JsonNode node, String lowerNodeType) {
+        String responseForModel = firstNonBlank(
+                textNode(node, "/response_for_model"),
+                textNode(node, "/content/response_for_model"),
+                deepText(node, "response_for_model"));
+        if (StringUtils.hasText(responseForModel)) {
+            return responseForModel;
+        }
+
+        boolean looksLikeToolResult = lowerNodeType.contains("tool")
+                || lowerNodeType.contains("function")
+                || StringUtils.hasText(textNode(node, "/tool_call_id"))
+                || StringUtils.hasText(textNode(node, "/tool_response_id"));
+        if (!looksLikeToolResult) {
+            return null;
+        }
+
+        String content = textNode(node, "/content");
+        if (!StringUtils.hasText(content)) {
+            return null;
+        }
+
+        String contentTrimmed = content.trim();
+        if (!contentTrimmed.startsWith("{") && !contentTrimmed.startsWith("[")) {
+            return content;
+        }
+
+        try {
+            JsonNode contentNode = objectMapper.readTree(contentTrimmed);
+            return firstNonBlank(
+                    textNode(contentNode, "/response_for_model"),
+                    deepText(contentNode, "response_for_model"),
+                    content);
+        } catch (Exception ignored) {
+            return content;
+        }
     }
 
     private String parseConversationId(String rawData) {
@@ -435,6 +562,10 @@ public class CozeAgentService {
             return new AgentChunk(AgentChunkType.CONTEXT, conversationId);
         }
 
+        static AgentChunk toolResult(String content) {
+            return new AgentChunk(AgentChunkType.TOOL_RESULT, content);
+        }
+
         static AgentChunk error(String message) {
             return new AgentChunk(AgentChunkType.ERROR, message);
         }
@@ -444,6 +575,7 @@ public class CozeAgentService {
         TOKEN,
         THINKING,
         CONTEXT,
+        TOOL_RESULT,
         DONE,
         ERROR
     }
