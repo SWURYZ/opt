@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useGreenhouses } from "../lib/greenhouseStore";
 import {
   Cpu,
   QrCode,
@@ -57,7 +58,9 @@ function normalizeDeviceType(raw: string | null): string {
 function mapFromBackend(item: DeviceMappingResponse): Device {
   const type = normalizeDeviceType(item.deviceType);
   const online = item.status === "BOUND";
-  const ghName = item.greenhouseCode && item.greenhouseCode.trim() ? item.greenhouseCode : "未分配";
+  let ghName = item.greenhouseCode && item.greenhouseCode.trim() ? item.greenhouseCode : "未分配";
+  const m1 = /GH[-_]?(\d{1,2})/i.exec(ghName);
+  if (m1) ghName = `${parseInt(m1[1], 10)}号大棚`;
   return {
     id: item.deviceId,
     name: item.deviceName || item.deviceId,
@@ -95,7 +98,7 @@ export function DeviceManagement() {
   const [filterType, setFilterType] = useState("全部");
   const [showBindModal, setShowBindModal] = useState(false);
   const [qrContent, setQrContent] = useState("");
-  const [bindGreenhouseCode, setBindGreenhouseCode] = useState("1号大棚");
+  const [bindGreenhouseCode, setBindGreenhouseCode] = useState("");
   const [scanHint, setScanHint] = useState("点击开启摄像头后扫码，或手动粘贴二维码内容");
   const [isLoading, setIsLoading] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
@@ -106,6 +109,10 @@ export function DeviceManagement() {
   const detectorRef = useRef<any>(null);
   const timerRef = useRef<number | null>(null);
   const scanningRef = useRef(false);
+
+  const { list: greenhouseList } = useGreenhouses();
+
+  const greenhouseNames = useMemo(() => greenhouseList.map((g) => g.name), [greenhouseList]);
 
   const filtered = useMemo(() => {
     return devices.filter((d) => {
@@ -138,7 +145,8 @@ export function DeviceManagement() {
   const onlineCount = devices.filter((d) => d.status === "在线").length;
   const offlineCount = devices.filter((d) => d.status === "离线").length;
   const alertCount = devices.filter((d) => d.status === "告警").length;
-  const greenhouseOptions = ["全部", ...Array.from(new Set(devices.map((d) => d.gh)))];
+  const greenhouseOptions = ["全部", ...Array.from(new Set([...greenhouseNames, ...devices.map((d) => d.gh)]))];
+  const unboundGreenhouses = greenhouseNames.filter((name) => !devices.some((d) => d.gh === name));
 
   function stopCamera() {
     if (timerRef.current) {
@@ -200,7 +208,7 @@ export function DeviceManagement() {
       await scanBindDevice({ qrContent: qrContent.trim(), greenhouseCode: bindGreenhouseCode });
       setScanHint("绑定成功");
       setQrContent("");
-      setBindGreenhouseCode("1号大棚");
+      setBindGreenhouseCode(greenhouseNames[0] || "");
       setShowBindModal(false);
       await loadDevices();
     } catch (e: any) {
@@ -209,6 +217,13 @@ export function DeviceManagement() {
       setIsBinding(false);
     }
   }
+
+  useEffect(() => {
+    if (!greenhouseNames.length) return;
+    if (!bindGreenhouseCode || !greenhouseNames.includes(bindGreenhouseCode)) {
+      setBindGreenhouseCode(greenhouseNames[0]);
+    }
+  }, [greenhouseNames, bindGreenhouseCode]);
 
   function requestUnbind(id: string) {
     setPendingUnbindId(id);
@@ -297,7 +312,7 @@ export function DeviceManagement() {
                 onChange={(e) => setBindGreenhouseCode(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-green-400"
               >
-                {["1号大棚", "2号大棚", "3号大棚", "4号大棚", "5号大棚", "6号大棚"].map((g) => (
+                {greenhouseNames.map((g) => (
                   <option key={g} value={g}>{g}</option>
                 ))}
               </select>
@@ -348,6 +363,29 @@ export function DeviceManagement() {
           </div>
         ))}
       </div>
+
+
+      {unboundGreenhouses.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="text-sm text-amber-800 font-medium mb-2">
+            以下大棚尚未绑定设备（新增大棚后会自动出现在这里）
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {unboundGreenhouses.map((gh) => (
+              <button
+                key={gh}
+                onClick={() => {
+                  setBindGreenhouseCode(gh);
+                  setShowBindModal(true);
+                }}
+                className="px-3 py-1.5 text-xs bg-white border border-amber-300 rounded-lg text-amber-700 hover:bg-amber-100"
+              >
+                {gh} · 去绑定
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
         <div className="flex items-center gap-4 flex-wrap">

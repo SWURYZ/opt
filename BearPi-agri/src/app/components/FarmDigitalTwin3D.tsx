@@ -1242,8 +1242,8 @@ function FarmScene({
 // ============================================================
 export function FarmDigitalTwin3D({ greenhouses, onSelect }: Props) {
   const [hoveredName, setHoveredName] = useState<string | null>(null);
-  // 默认关闭手势控制，由用户手动开启
-  const [gestureMode, setGestureMode] = useState(false);
+  // 默认开启手势控制，进入页面即可使用
+  const [gestureMode, setGestureMode] = useState(true);
   const [handStatus, setHandStatus] = useState<"idle" | "tracking" | "lost">("idle");
   const orbitRef = useRef<OrbitControlsImpl | null>(null);
   const initialCamPos = useRef<[number, number, number]>([14, 10, 14]);

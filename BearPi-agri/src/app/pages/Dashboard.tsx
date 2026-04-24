@@ -6,19 +6,17 @@ import {
   Sun,
   Wind,
   AlertTriangle,
-  CheckCircle,
-  WifiOff,
   RefreshCw,
   TrendingUp,
   TrendingDown,
   Eye,
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { SimpleModal } from "../components/ui/SimpleModal";
 import { fetchRealtimeSnapshot, type SensorMetrics } from "../services/realtime";
 import { fetchAllConnectedDevices } from "../services/greenhouseMonitor";
 import { fetchThresholdAlertRecords, type ThresholdAlertRecord } from "../services/thresholdAlert";
 import { PestRecognitionCard } from "../components/dashboard/PestRecognitionCard";
+import { useGreenhouses } from "../lib/greenhouseStore";
 
 const DASH_KEYFRAMES = `
 @keyframes dash-fade-up { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
@@ -31,13 +29,13 @@ const DASH_KEYFRAMES = `
 @keyframes dash-card-in { from{opacity:0;transform:scale(0.95) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
 `;
 
-const greenhouses = [
+const _greenhouses = [
   {
     id: "GH-01",
     name: "1号大棚",
     crop: "番茄",
-    status: "正常",
-    statusColor: "green",
+    status: "实时",
+    statusColor: "blue",
     temp: "--",
     humidity: "--",
     light: "--",
@@ -50,8 +48,8 @@ const greenhouses = [
     id: "GH-02",
     name: "2号大棚",
     crop: "黄瓜",
-    status: "离线",
-    statusColor: "gray",
+    status: "实时",
+    statusColor: "blue",
     temp: "--",
     humidity: "--",
     light: "--",
@@ -64,8 +62,8 @@ const greenhouses = [
     id: "GH-03",
     name: "3号大棚",
     crop: "草莓",
-    status: "离线",
-    statusColor: "gray",
+    status: "实时",
+    statusColor: "blue",
     temp: "--",
     humidity: "--",
     light: "--",
@@ -78,8 +76,8 @@ const greenhouses = [
     id: "GH-04",
     name: "4号大棚",
     crop: "辣椒",
-    status: "离线",
-    statusColor: "gray",
+    status: "实时",
+    statusColor: "blue",
     temp: "--",
     humidity: "--",
     light: "--",
@@ -92,8 +90,8 @@ const greenhouses = [
     id: "GH-05",
     name: "5号大棚",
     crop: "生菜",
-    status: "离线",
-    statusColor: "gray",
+    status: "实时",
+    statusColor: "blue",
     temp: "--",
     humidity: "--",
     light: "--",
@@ -106,8 +104,8 @@ const greenhouses = [
     id: "GH-06",
     name: "6号大棚",
     crop: "茄子",
-    status: "离线",
-    statusColor: "gray",
+    status: "实时",
+    statusColor: "blue",
     temp: "--",
     humidity: "--",
     light: "--",
@@ -117,6 +115,45 @@ const greenhouses = [
     alerts: 0,
   },
 ];
+
+type DashboardGreenhouse = {
+  id: string;
+  name: string;
+  crop: string;
+  status: "实时" | "告警";
+  statusColor: string;
+  temp: number | string;
+  humidity: number | string;
+  light: number | string;
+  co2: number | string;
+  deviceCount: number;
+  onlineDevices: number;
+  alerts: number;
+};
+
+function greenhouseIdFromName(name: string, index: number): string {
+  const m = /^(\d{1,2})号大棚$/.exec(name);
+  if (m) return `GH-${String(parseInt(m[1], 10)).padStart(2, "0")}`;
+  // 非标准命名时使用索引兜底，保证每个新增大棚都有可显示ID
+  return `GH-${String(index + 1).padStart(2, "0")}`;
+}
+
+function makeDashboardGreenhouse(name: string, crop: string, index: number): DashboardGreenhouse {
+  return {
+    id: greenhouseIdFromName(name, index),
+    name,
+    crop,
+    status: "实时",
+    statusColor: "blue",
+    temp: "--",
+    humidity: "--",
+    light: "--",
+    co2: "--",
+    deviceCount: 0,
+    onlineDevices: 0,
+    alerts: 0,
+  };
+}
 
 const trendData = [
   { time: "00:00", temp: 22, humidity: 65 },
@@ -143,6 +180,19 @@ function simNumber(ghId: string, key: "temp" | "humidity" | "light" | "co2", bas
   const delta = cfg[key] ?? 0;
   if (key === "co2") return +(base + delta).toFixed(0);
   return +(base + delta).toFixed(1);
+}
+
+function buildOverviewMetrics(ghId: string, base: SensorMetrics): { temp: number | string; humidity: number | string; light: number | string; co2: number | string } {
+  const baseTemp = typeof base.temp === "number" ? base.temp : null;
+  const baseHum = typeof base.humidity === "number" ? base.humidity : null;
+  const baseLight = typeof base.light === "number" ? base.light : null;
+  const baseCo2 = typeof base.co2 === "number" ? base.co2 : 420;
+  return {
+    temp: baseTemp === null ? "--" : simNumber(ghId, "temp", baseTemp),
+    humidity: baseHum === null ? "--" : simNumber(ghId, "humidity", baseHum),
+    light: baseLight === null ? "--" : simNumber(ghId, "light", baseLight),
+    co2: simNumber(ghId, "co2", baseCo2),
+  };
 }
 
 const alertsData_FALLBACK: AlertItem[] = [];
@@ -193,25 +243,13 @@ function recordToAlertItem(r: ThresholdAlertRecord): AlertItem {
   };
 }
 
-const statusIconMap: Record<string, React.ReactNode> = {
-  正常: <CheckCircle className="w-4 h-4 text-green-500" />,
-  告警: <AlertTriangle className="w-4 h-4 text-red-500" />,
-  离线: <WifiOff className="w-4 h-4 text-gray-400" />,
-};
-
-const statusBgMap: Record<string, string> = {
-  正常: "bg-green-50 border-green-200",
-  告警: "bg-red-50 border-red-200",
-  离线: "bg-gray-50 border-gray-200",
-};
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const [greenhouseData, setGreenhouseData] = useState(greenhouses);
+  const { list: greenhouseList } = useGreenhouses();
+  const [greenhouseData, setGreenhouseData] = useState<DashboardGreenhouse[]>([]);
   const [lastUpdate, setLastUpdate] = useState("2026-04-14 14:32:05");
   const [refreshNotice, setRefreshNotice] = useState("");
-  const [offlineDialogOpen, setOfflineDialogOpen] = useState(false);
-  const [offlineGhName, setOfflineGhName] = useState("");
   const [tick, setTick] = useState(0);
   const [selectedView, setSelectedView] = useState<"pest" | "trend" | "alert">("pest");
   const [alertsData, setAlertsData] = useState<AlertItem[]>(alertsData_FALLBACK);
@@ -222,6 +260,22 @@ export function Dashboard() {
     const t = window.setInterval(() => setTick((n) => n + 1), 2000);
     return () => window.clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    setGreenhouseData((prev) => {
+      const next = greenhouseList.map((g, idx) => {
+        const found = prev.find((p) => p.name === g.name);
+        const base = makeDashboardGreenhouse(g.name, g.crop, idx);
+        if (!found) return base;
+        return {
+          ...found,
+          id: greenhouseIdFromName(g.name, idx),
+          crop: g.crop,
+        };
+      });
+      return next;
+    });
+  }, [greenhouseList]);
 
   useEffect(() => {
     let disposed = false;
@@ -272,44 +326,22 @@ export function Dashboard() {
       if (disposed) return;
       setAlertsData(alertItems);
 
-      const baseTemp = typeof snapshot.temp === "number" ? snapshot.temp : null;
-      const baseHum = typeof snapshot.humidity === "number" ? snapshot.humidity : null;
-      const baseLight = typeof snapshot.light === "number" ? snapshot.light : null;
-      const baseCo2 = typeof snapshot.co2 === "number" ? snapshot.co2 : 420;
-
       setGreenhouseData((prev) =>
         prev.map((gh) => {
           const counts = devicesByGh[gh.id];
           const total = counts ? counts.total : 0;
           const online = counts ? counts.online : 0;
 
-          let temp: number | string = "--";
-          let humidity: number | string = "--";
-          let light: number | string = "--";
-          let co2: number | string = "--";
-
-          if (gh.id === "GH-01") {
-            if (baseTemp !== null) temp = baseTemp;
-            if (baseHum !== null) humidity = baseHum;
-            if (baseLight !== null) light = baseLight;
-            if (typeof snapshot.co2 === "number") co2 = snapshot.co2;
-          } else if (online > 0 && baseTemp !== null) {
-            // 仅在该大棚有设备在线时才呈现模拟数据
-            temp = simNumber(gh.id, "temp", baseTemp);
-            if (baseHum !== null) humidity = simNumber(gh.id, "humidity", baseHum);
-            if (baseLight !== null) light = simNumber(gh.id, "light", baseLight);
-            co2 = simNumber(gh.id, "co2", baseCo2);
-          }
+          const metrics = buildOverviewMetrics(gh.id, snapshot);
 
           const alertCount = alertsCountByGh[gh.id] ?? 0;
-          // 状态推导：有告警 → 告警；有在线设备 → 正常；无在线设备 → 离线
-          const status = alertCount > 0 ? "告警" : online > 0 ? "正常" : "离线";
+          const status = alertCount > 0 ? "告警" : "实时";
           return {
             ...gh,
-            temp,
-            humidity,
-            light,
-            co2,
+            temp: metrics.temp,
+            humidity: metrics.humidity,
+            light: metrics.light,
+            co2: metrics.co2,
             deviceCount: total > 0 ? total : gh.deviceCount, // 后端返回为 0 时保留默认预设
             onlineDevices: online,
             status,
@@ -330,7 +362,7 @@ export function Dashboard() {
   }, []);
 
   const totalAlerts = greenhouseData.reduce((sum, g) => sum + g.alerts, 0);
-  const onlineCount = greenhouseData.filter((g) => g.status !== "离线").length;
+  const realtimeCount = greenhouseData.filter((g) => g.status !== "告警").length;
 
   function nowText() {
     const now = new Date();
@@ -354,34 +386,18 @@ export function Dashboard() {
   }
 
   function handleRefresh() {
-    // Only GH-01 is online for now; keep other greenhouses offline static.
     setLastUpdate(nowText());
     setRefreshNotice("刷新成功，已更新最新实时数据");
     window.setTimeout(() => setRefreshNotice(""), 2200);
   }
 
-  function toMonitor(ghName: string, status: string) {
-    if (status === "离线") {
-      setOfflineGhName(ghName);
-      setOfflineDialogOpen(true);
-      return;
-    }
+  function toMonitor(ghName: string) {
     navigate(`/monitor?gh=${encodeURIComponent(ghName)}`);
   }
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6" style={{ position: "relative" }}>
       <style>{DASH_KEYFRAMES}</style>
-
-      <SimpleModal
-        open={offlineDialogOpen}
-        title="大棚离线"
-        description={`${offlineGhName} 当前离线，无法预览实时监测页面。`}
-        confirmText="知道了"
-        hideCancel
-        onConfirm={() => setOfflineDialogOpen(false)}
-        onCancel={() => setOfflineDialogOpen(false)}
-      />
 
       {/* Header */}
       <div className="flex items-center justify-between" ref={headerRef} style={{ animation: "dash-fade-up 0.5s ease both" }}>
@@ -415,7 +431,7 @@ export function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {[
           { label: "大棚总数", value: greenhouseData.length, unit: "个", color: "blue", icon: "🏗️" },
-          { label: "在线大棚", value: onlineCount, unit: "个", color: "green", icon: "✅" },
+          { label: "实时大棚", value: realtimeCount, unit: "个", color: "green", icon: "✅" },
           { label: "告警数量", value: totalAlerts, unit: "条", color: "red", icon: "🔔" },
           { label: "设备总数", value: greenhouseData.reduce((s, g) => s + g.deviceCount, 0), unit: "台", color: "purple", icon: "📡" },
         ].map((card, i) => (
@@ -446,7 +462,7 @@ export function Dashboard() {
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-gray-700">大棚列表</h2>
               <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
-                {onlineCount}/{greenhouseData.length} 在线
+                {realtimeCount}/{greenhouseData.length} 实时
               </span>
             </div>
             <span className="text-[10px] text-gray-400">滚动查看</span>
@@ -458,8 +474,10 @@ export function Dashboard() {
             {greenhouseData.map((gh, idx) => (
               <div
                 key={gh.id}
-                onClick={() => toMonitor(gh.name, gh.status)}
-                className={`group rounded-lg border-2 p-2.5 cursor-pointer hover:shadow-md transition-all ${statusBgMap[gh.status]}`}
+                onClick={() => toMonitor(gh.name)}
+                className={`group rounded-lg border-2 p-2.5 cursor-pointer hover:shadow-md transition-all ${
+                  gh.status === "告警" ? "bg-red-50 border-red-200" : "bg-blue-50 border-blue-200"
+                }`}
                 style={{ animation: `dash-card-in 0.45s ease ${0.05 + idx * 0.05}s both` }}
               >
                 <div className="flex items-center justify-between mb-1.5">
@@ -470,14 +488,14 @@ export function Dashboard() {
                     </span>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    {statusIconMap[gh.status]}
+                    {gh.status === "告警" ? (
+                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 text-blue-500" />
+                    )}
                     <span
                       className={`text-[10px] font-medium ${
-                        gh.status === "正常"
-                          ? "text-green-600"
-                          : gh.status === "告警"
-                          ? "text-red-500"
-                          : "text-gray-400"
+                        gh.status === "告警" ? "text-red-500" : "text-blue-600"
                       }`}
                     >
                       {gh.status}

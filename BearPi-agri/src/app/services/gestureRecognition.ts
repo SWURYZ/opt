@@ -24,11 +24,18 @@ type GestureCallback = (event: GestureEvent) => void;
 
 // ── MediaPipe config ────────────────────────────────────────────────────────
 // WASM 文件由 public/mediapipe/ 本地提供，避免 CDN 网络依赖
-const WASM_BASE = "/mediapipe";
-const HAND_MODEL_URL =
-  "/mediapipe-models/hand_landmarker.task";
-const GESTURE_MODEL_URL = "/models/gesture_model/gesture_model.onnx";
-const GESTURE_LABELS_URL = "/models/gesture_model/labels.json";
+const APP_BASE_URL = import.meta.env.BASE_URL || "/";
+
+function withBase(path: string): string {
+  const cleanBase = APP_BASE_URL.endsWith("/") ? APP_BASE_URL : `${APP_BASE_URL}/`;
+  const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+  return `${cleanBase}${cleanPath}`;
+}
+
+const WASM_BASE = withBase("mediapipe");
+const HAND_MODEL_URL = withBase("mediapipe-models/hand_landmarker.task");
+const GESTURE_MODEL_URL = withBase("models/gesture_model/gesture_model.onnx");
+const GESTURE_LABELS_URL = withBase("models/gesture_model/labels.json");
 
 const NUM_FEATURES = 72;
 
@@ -92,7 +99,10 @@ async function ensureInit(): Promise<void> {
 
     // 用运行时拼接的 origin + 路径，避免 Vite 静态分析 dynamic import 触发
     // "should not be imported from source code" 报错
-    const ortBase = (typeof window !== "undefined" ? window.location.origin : "") + "/ort/";
+    const ortBase =
+      typeof window !== "undefined"
+        ? new URL(withBase("ort/"), window.location.origin).toString()
+        : withBase("ort/");
     ort.env.wasm.wasmPaths = ortBase;
     ort.env.wasm.numThreads = 1;
     gestureSession = await ort.InferenceSession.create(GESTURE_MODEL_URL, {
@@ -385,8 +395,8 @@ export function describeGestureError(err: unknown): string {
     }
   }
   const msg = err instanceof Error ? err.message : String(err);
-  if (/onnx|wasm|InferenceSession|label/i.test(msg)) {
-    return "手势识别模型加载失败，请检查模型文件与网络后重试";
+  if (/onnx|wasm|InferenceSession|label|model|fetch/i.test(msg)) {
+    return `手势识别模型加载失败：${msg}`;
   }
   return `手势识别启动失败：${msg}`;
 }
