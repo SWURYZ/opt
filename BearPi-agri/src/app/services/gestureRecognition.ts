@@ -8,7 +8,7 @@
  */
 import { HandLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
-import * as ort from "onnxruntime-web";
+import * as ort from "onnxruntime-web/wasm";
 
 export type GestureLabel =
   | "one" | "two" | "three" | "four" | "five"
@@ -107,13 +107,14 @@ async function ensureInit(): Promise<void> {
     }
     gestureLabels = labels.map((x) => String(x));
 
-    // 用运行时拼接的 origin + 路径，避免 Vite 静态分析 dynamic import 触发
-    // "should not be imported from source code" 报错
     const ortBase =
       typeof window !== "undefined"
         ? new URL(withBase("ort/"), window.location.origin).toString()
         : withBase("ort/");
-    ort.env.wasm.wasmPaths = ortBase;
+    ort.env.wasm.wasmPaths = {
+      mjs: new URL("ort-wasm-simd-threaded.js", ortBase).toString(),
+      wasm: new URL("ort-wasm-simd-threaded.wasm", ortBase).toString(),
+    };
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
     gestureSession = await ort.InferenceSession.create(GESTURE_MODEL_URL, {
