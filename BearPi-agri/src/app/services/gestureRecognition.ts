@@ -58,6 +58,7 @@ let rafId: number | null = null;
 let videoEl: HTMLVideoElement | null = null;
 let cameraStream: MediaStream | null = null;
 let currentCallback: GestureCallback | null = null;
+let pauseCount = 0;
 
 let latestModelGesture: GestureLabel = "none";
 let inferenceInFlight = false;
@@ -73,17 +74,26 @@ let lastAnyTime = 0;
 async function ensureInit(): Promise<void> {
   if (!handLandmarker) {
     const vision = await FilesetResolver.forVisionTasks(WASM_BASE);
-    handLandmarker = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: HAND_MODEL_URL,
-        delegate: "GPU",
-      },
-      runningMode: "VIDEO",
+    const options = {
+      runningMode: "VIDEO" as const,
       numHands: 1,
       minHandDetectionConfidence: 0.5,
       minHandPresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
-    });
+    };
+
+    try {
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: HAND_MODEL_URL,
+          delegate: "GPU",
+        },
+        ...options,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`MediaPipe GPU 初始化失败，当前设备或浏览器不支持 GPU 手势识别：${message}`);
+    }
   }
 
   if (!gestureSession) {
@@ -105,6 +115,7 @@ async function ensureInit(): Promise<void> {
         : withBase("ort/");
     ort.env.wasm.wasmPaths = ortBase;
     ort.env.wasm.numThreads = 1;
+    ort.env.wasm.proxy = false;
     gestureSession = await ort.InferenceSession.create(GESTURE_MODEL_URL, {
       executionProviders: ["wasm"],
       graphOptimizationLevel: "all",
@@ -112,6 +123,9 @@ async function ensureInit(): Promise<void> {
     gestureInputName = gestureSession.inputNames[0] ?? "";
     if (!gestureInputName) {
       throw new Error("手势模型输入节点缺失");
+    }
+    if (!gestureSession.outputNames.length) {
+      throw new Error("手势模型输出节点缺失");
     }
   }
 }
@@ -170,9 +184,11 @@ function normalizeScores(values: number[]): number[] {
   return exps.map((v) => v / expSum);
 }
 
-function extractScores(outputs: Record<string, ort.Tensor>): number[] | null {
+function extractScores(outputs: Record<string, ort.Tensor>): number[] {
   const tensors = Object.values(outputs);
-  if (!tensors.length) return null;
+  if (!tensors.length) {
+    throw new Error("手势模型未返回输出张量");
+  }
 
   for (const tensor of tensors) {
     const lastDim = tensor.dims[tensor.dims.length - 1] ?? 0;
@@ -181,41 +197,57 @@ function extractScores(outputs: Record<string, ort.Tensor>): number[] | null {
     }
   }
 
-  const biggest = tensors
-    .map((t) => ({ t, size: (t.data as ArrayLike<number>).length }))
-    .sort((a, b) => b.size - a.size)[0]?.t;
+  const shapeList = tensors.map((t) => `[${t.dims.join(",")}]`).join(", ");
+  throw new Error(`手势模型输出维度与 labels.json 不匹配，输出=${shapeList}，标签数=${gestureLabels.length}`);
+}
 
-  if (!biggest) return null;
-  const arr = Array.from(biggest.data as ArrayLike<number>);
-  if (arr.length >= gestureLabels.length) {
-    return arr.slice(0, gestureLabels.length);
+async function openGestureCamera(): Promise<MediaStream> {
+  if (typeof window === "undefined" || typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error("手势识别只能在浏览器端运行，服务器无法直接调用客户端摄像头");
   }
-  return null;
+
+  return navigator.mediaDevices.getUserMedia({
+    video: { width: 640, height: 480, facingMode: "user" },
+    audio: false,
+  });
+}
+
+async function createGestureVideo(stream: MediaStream): Promise<HTMLVideoElement> {
+  const video = document.createElement("video");
+  video.srcObject = stream;
+  video.playsInline = true;
+  video.muted = true;
+  video.autoplay = true;
+  video.style.cssText =
+    "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;";
+  document.body.appendChild(video);
+  await video.play();
+  return video;
 }
 
 async function classifyFromModel(lm: NormalizedLandmark[]): Promise<GestureLabel> {
   if (!gestureSession || !gestureInputName || gestureLabels.length === 0) {
-    return "none";
+    throw new Error("手势模型尚未初始化");
   }
 
-  try {
-    const features = computeFeaturesFromLandmarks(lm);
-    const inputTensor = new ort.Tensor("float32", features, [1, NUM_FEATURES]);
-    const outputs = await gestureSession.run({ [gestureInputName]: inputTensor });
-    const rawScores = extractScores(outputs);
-    if (!rawScores || rawScores.length !== gestureLabels.length) {
-      return "none";
-    }
-
-    const probs = normalizeScores(rawScores);
-    let bestIdx = 0;
-    for (let i = 1; i < probs.length; i += 1) {
-      if (probs[i] > probs[bestIdx]) bestIdx = i;
-    }
-    return asGestureLabel(gestureLabels[bestIdx] ?? "none");
-  } catch {
-    return "none";
+  const features = computeFeaturesFromLandmarks(lm);
+  if (features.length !== NUM_FEATURES) {
+    throw new Error(`手势模型输入特征长度错误：期望 ${NUM_FEATURES}，实际 ${features.length}`);
   }
+
+  const inputTensor = new ort.Tensor("float32", features, [1, NUM_FEATURES]);
+  const outputs = await gestureSession.run({ [gestureInputName]: inputTensor });
+  const rawScores = extractScores(outputs);
+  if (rawScores.length !== gestureLabels.length) {
+    throw new Error(`手势模型输出数量错误：期望 ${gestureLabels.length}，实际 ${rawScores.length}`);
+  }
+
+  const probs = normalizeScores(rawScores);
+  let bestIdx = 0;
+  for (let i = 1; i < probs.length; i += 1) {
+    if (probs[i] > probs[bestIdx]) bestIdx = i;
+  }
+  return asGestureLabel(gestureLabels[bestIdx] ?? "none");
 }
 
 // ── Detection loop ───────────────────────────────────────────────────────────
@@ -281,6 +313,12 @@ function processFrame(): void {
         .then((gesture) => {
           if (seq === inferenceSeq) {
             latestModelGesture = gesture;
+          }
+        })
+        .catch((err) => {
+          console.warn("[GestureRec] ONNX inference failed", err);
+          if (seq === inferenceSeq) {
+            latestModelGesture = "none";
           }
         })
         .finally(() => {
@@ -353,21 +391,9 @@ export async function startGestureRecognition(
 
   await ensureInit();
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: 640, height: 480, facingMode: "user" },
-    audio: false,
-  });
+  const stream = await openGestureCamera();
   cameraStream = stream;
-
-  const video = document.createElement("video");
-  video.srcObject  = stream;
-  video.playsInline = true;
-  video.muted      = true;
-  video.style.cssText =
-    "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;";
-  document.body.appendChild(video);
-  await video.play();
-  videoEl = video;
+  videoEl = await createGestureVideo(stream);
 
   // Reset debounce state
   pendingGesture     = "none";
@@ -395,7 +421,13 @@ export function describeGestureError(err: unknown): string {
     }
   }
   const msg = err instanceof Error ? err.message : String(err);
-  if (/onnx|wasm|InferenceSession|label|model|fetch/i.test(msg)) {
+  if (/服务器无法直接调用|浏览器端|mediaDevices|getUserMedia/i.test(msg)) {
+    return "摄像头只能由浏览器页面调用，服务器无法直接打开客户端摄像头；请在 HTTPS 或 localhost 页面中使用手势识别";
+  }
+  if (/MediaPipe GPU|GPU delegate|delegate.*GPU/i.test(msg)) {
+    return `MediaPipe GPU 初始化失败：${msg}`;
+  }
+  if (/onnx|wasm|InferenceSession|label|labels|model|模型|输出|输入节点|fetch/i.test(msg)) {
     return `手势识别模型加载失败：${msg}`;
   }
   return `手势识别启动失败：${msg}`;
@@ -417,6 +449,7 @@ export function stopGestureRecognition(): void {
     videoEl = null;
   }
   currentCallback    = null;
+  pauseCount         = 0;
   pendingGesture     = "none";
   pendingStartTime   = 0;
   lastEmittedGesture = "none";
@@ -425,4 +458,46 @@ export function stopGestureRecognition(): void {
   latestModelGesture = "none";
   inferenceInFlight  = false;
   inferenceSeq       = 0;
+}
+
+export function pauseGestureRecognition(): void {
+  pauseCount += 1;
+  if (pauseCount > 1) return;
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+  }
+  if (videoEl) {
+    videoEl.srcObject = null;
+    videoEl.remove();
+    videoEl = null;
+  }
+  pendingGesture     = "none";
+  pendingStartTime   = 0;
+  latestModelGesture = "none";
+  inferenceInFlight  = false;
+}
+
+export async function resumeGestureRecognition(): Promise<void> {
+  if (pauseCount === 0) return;
+  pauseCount -= 1;
+  if (pauseCount > 0) return;
+  if (!currentCallback) return;
+  if (rafId !== null && cameraStream) return;
+
+  try {
+    const stream = await openGestureCamera();
+    cameraStream = stream;
+    videoEl = await createGestureVideo(stream);
+
+    lastEmittedTime = 0;
+    lastAnyTime     = 0;
+    rafId = requestAnimationFrame(processFrame);
+  } catch (err) {
+    console.warn("[GestureRec] resume failed", err);
+  }
 }

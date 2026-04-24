@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import * as auth from "../services/auth";
 import { listFaceRecords, deleteFaceRecord, type FaceRecordInfo } from "../services/faceRecognition";
+import { pauseGestureRecognition, resumeGestureRecognition } from "../services/gestureRecognition";
 import { SimpleModal } from "../components/ui/SimpleModal";
 
 type AddStep = "form" | "camera" | "uploading" | "done";
@@ -82,14 +83,19 @@ export function UserManagement() {
   /* ---- 清理 ---- */
   useEffect(() => {
     return () => {
+      const hadAdd = !!streamRef.current;
+      const hadFace = !!faceStreamRef.current;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       faceStreamRef.current?.getTracks().forEach((t) => t.stop());
+      if (hadAdd) void resumeGestureRecognition();
+      if (hadFace) void resumeGestureRecognition();
     };
   }, []);
 
   /* ---- 打开摄像头 ---- */
   const openCamera = useCallback(async () => {
     setAddError("");
+    pauseGestureRecognition();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
@@ -102,12 +108,17 @@ export function UserManagement() {
       });
     } catch {
       setAddError("无法访问摄像头");
+      void resumeGestureRecognition();
     }
   }, []);
 
   const closeCamera = useCallback(() => {
+    const wasActive = !!streamRef.current;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    if (wasActive) {
+      void resumeGestureRecognition();
+    }
   }, []);
 
   /* ---- 拍照并注册 ---- */
@@ -157,6 +168,7 @@ export function UserManagement() {
     setFaceAddError("");
     setFaceStepDone(false);
     setFaceUploading(false);
+    pauseGestureRecognition();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
@@ -168,16 +180,21 @@ export function UserManagement() {
       });
     } catch {
       setFaceAddError("无法访问摄像头");
+      void resumeGestureRecognition();
     }
   }, []);
 
   const closeFaceRegister = useCallback(() => {
+    const wasActive = !!faceStreamRef.current;
     faceStreamRef.current?.getTracks().forEach((t) => t.stop());
     faceStreamRef.current = null;
     setFaceTarget(null);
     setFaceAddError("");
     setFaceStepDone(false);
     setFaceUploading(false);
+    if (wasActive) {
+      void resumeGestureRecognition();
+    }
   }, []);
 
   const captureFaceForUser = useCallback(async () => {
@@ -197,8 +214,12 @@ export function UserManagement() {
     if (!blob) { setFaceAddError("拍照失败"); return; }
 
     setFaceUploading(true);
+    const hadStream = !!faceStreamRef.current;
     faceStreamRef.current?.getTracks().forEach((t) => t.stop());
     faceStreamRef.current = null;
+    if (hadStream) {
+      void resumeGestureRecognition();
+    }
 
     try {
       await auth.updateUserFace(faceTarget.id, blob);

@@ -23,7 +23,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { streamAgriAgentChat } from "../services/agriAgent";
+import { streamAgriAgentChat, streamAgriAgentChatWithImage } from "../services/agriAgent";
 import { fetchRealtimeSnapshot } from "../services/realtime";
 import { sendManualControl } from "../services/deviceControl";
 import { speak, stopSpeaking, isTTSSupported } from "../lib/speech";
@@ -569,9 +569,8 @@ export function AIAssistant() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const questionText = selectedImage
-      ? "[\u7528\u6237\u4e0a\u4f20\u4e86\u4e00\u5f20\u56fe\u7247]\n" + content
-      : content;
+    const questionText = content;
+    const imageFile = selectedImage?.file;
 
     if (detectedName && detectedName !== rememberedUserName) {
       setRememberedUserName(detectedName);
@@ -584,33 +583,47 @@ export function AIAssistant() {
     const enrichedQuestion = buildRecentDialogueContext(messages, memoryAwareQuestion);
 
     try {
-      await streamAgriAgentChat(
-        {
-          question: enrichedQuestion,
-          userId: "agri-web-ui",
-          conversationId: conversationId ?? undefined,
+      const streamCallbacks = {
+        onToken: (token: string) => {
+          const cleaned = token.replace(/^###\s*$/gm, "").replace(/^###\s*\n/gm, "");
+          if (cleaned) appendField(assistantId, "content", cleaned);
         },
-        {
-          onToken: (token) => {
-            // Strip ### noise lines from Coze output
-            const cleaned = token.replace(/^###\s*$/gm, "").replace(/^###\s*\n/gm, "");
-            if (cleaned) appendField(assistantId, "content", cleaned);
-          },
-          onThinking: (token) => {
-            appendField(assistantId, "thinking", token);
-          },
-          onContext: (id) => {
-            const trimmed = id?.trim();
-            if (trimmed) {
-              setConversationId(trimmed);
-            }
-          },
-          onError: (message) => {
-            updateField(assistantId, "content", "\u670d\u52a1\u5f02\u5e38\uff1a" + (message || "\u8bf7\u7a0d\u540e\u91cd\u8bd5"));
-          },
+        onThinking: (token: string) => {
+          appendField(assistantId, "thinking", token);
         },
-        controller.signal,
-      );
+        onContext: (id: string) => {
+          const trimmed = id?.trim();
+          if (trimmed) {
+            setConversationId(trimmed);
+          }
+        },
+        onError: (message: string) => {
+          updateField(assistantId, "content", "\u670d\u52a1\u5f02\u5e38\uff1a" + (message || "\u8bf7\u7a0d\u540e\u91cd\u8bd5"));
+        },
+      };
+
+      if (imageFile) {
+        await streamAgriAgentChatWithImage(
+          {
+            image: imageFile,
+            question: enrichedQuestion,
+            userId: "agri-web-ui",
+            conversationId: conversationId ?? undefined,
+          },
+          streamCallbacks,
+          controller.signal,
+        );
+      } else {
+        await streamAgriAgentChat(
+          {
+            question: enrichedQuestion,
+            userId: "agri-web-ui",
+            conversationId: conversationId ?? undefined,
+          },
+          streamCallbacks,
+          controller.signal,
+        );
+      }
 
       setMessages((prev) =>
         prev.map((msg) =>

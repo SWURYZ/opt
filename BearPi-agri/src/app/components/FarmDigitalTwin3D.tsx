@@ -454,8 +454,10 @@ function MiniGreenhouse({
 
   const offline = data.connectionMode === "offline";
   const alert = !!data.hasAlert;
-  const glassColor = alert ? "#7f1d1d" : offline ? "#475569" : "#3b82f6";
+  const glassColor = alert ? "#7f1d1d" : offline ? "#475569" : "#7dd3fc";
   const baseEmissive = hovered ? "#22c55e" : "#000000";
+  const frameColor = offline ? "#64748b" : "#cbd5e1";
+  const soilColor = pumpOn ? "#3f2414" : "#5a2f17";
 
   return (
     <group
@@ -485,29 +487,38 @@ function MiniGreenhouse({
       <mesh position={[0, 0.04, 0]} castShadow receiveShadow>
         <boxGeometry args={[D + 0.05, 0.08, W + 0.05]} />
         <meshStandardMaterial
-          color={hovered ? "#0ea5e9" : "#475569"}
+          color={hovered ? "#0ea5e9" : offline ? "#334155" : "#475569"}
           emissive={baseEmissive}
           emissiveIntensity={hovered ? 0.4 : 0}
-          metalness={0.4}
-          roughness={0.6}
+          metalness={0.35}
+          roughness={0.68}
         />
       </mesh>
+      <mesh position={[0, 0.091, 0]} receiveShadow>
+        <boxGeometry args={[D + 0.18, 0.035, W + 0.18]} />
+        <meshStandardMaterial color="#8b5a2b" roughness={0.92} />
+      </mesh>
 
-      {/* 玻璃拱顶 (半圆柱体) - 平边下沉贴合地基顶部
-          性能：改用 meshStandardMaterial + opacity，避免 transmission 触发额外的 opaque pass */}
+      {/* 玻璃拱顶 (半圆柱体) - 平边下沉贴合地基顶部 */}
       <mesh position={[0, 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[R, R, W, 24, 1, true, 0, Math.PI]} />
+        <cylinderGeometry args={[R, R, W, 32, 1, true, 0, Math.PI]} />
         <meshStandardMaterial
           color={glassColor}
           transparent
-          opacity={data.ledOn ? 0.38 : 0.28}
-          roughness={0.1}
-          metalness={0.1}
+          opacity={offline ? 0.22 : data.ledOn ? 0.42 : 0.30}
+          roughness={0.28}
+          metalness={0.02}
           side={THREE.DoubleSide}
-          emissive={data.ledOn ? "#fde047" : "#000000"}
-          emissiveIntensity={data.ledOn ? 0.5 : 0}
+          emissive={data.ledOn ? "#facc15" : alert ? "#ef4444" : "#000000"}
+          emissiveIntensity={data.ledOn ? 0.42 : alert ? 0.16 : 0}
         />
       </mesh>
+      {[0.18, 0.38].map((y, i) => (
+        <mesh key={`film-${i}`} position={[0, y, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[R + 0.006, R + 0.006, W + 0.01, 32, 1, true, 0.12, Math.PI - 0.24]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={offline ? 0.035 : 0.055} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
 
       {/* 前后山墙 */}
       {[-W / 2, W / 2].map((z) => (
@@ -524,20 +535,70 @@ function MiniGreenhouse({
         </mesh>
       ))}
 
-      {/* 拱筋（前后两道） */}
-      {[-W / 2 + 0.02, W / 2 - 0.02].map((z) => (
-        <mesh key={z} position={[0, 0.08, z]} rotation={[0, 0, 0]}>
-          <torusGeometry args={[R, 0.012, 6, 24, Math.PI]} />
-          <meshStandardMaterial color="#94a3b8" metalness={0.7} roughness={0.4} />
+      {/* 拱筋与纵向骨架 */}
+      {[-W / 2 + 0.02, -W / 4, 0, W / 4, W / 2 - 0.02].map((z) => (
+        <mesh key={`rib-${z}`} position={[0, 0.08, z]} rotation={[0, 0, 0]}>
+          <torusGeometry args={[R, 0.01, 6, 28, Math.PI]} />
+          <meshStandardMaterial color={frameColor} metalness={0.75} roughness={0.35} />
         </mesh>
       ))}
-
-      {/* 内部植床 (3 列小条) */}
-      {[-0.32, 0, 0.32].map((x) => (
-        <mesh key={x} position={[x, 0.13, 0]}>
-          <boxGeometry args={[0.18, 0.06, W - 0.2]} />
-          <meshStandardMaterial color="#5a2f17" />
+      {[-0.42, -0.18, 0.18, 0.42].map((x) => (
+        <mesh key={`beam-${x}`} position={[x, 0.51 - Math.abs(x) * 0.18, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.009, 0.009, W + 0.08, 8]} />
+          <meshStandardMaterial color={frameColor} metalness={0.75} roughness={0.32} />
         </mesh>
+      ))}
+      <group position={[0, 0.26, W / 2 + 0.018]}>
+        <mesh position={[0, -0.06, 0]}>
+          <boxGeometry args={[0.34, 0.34, 0.018]} />
+          <meshStandardMaterial color="#e0f2fe" transparent opacity={offline ? 0.16 : 0.24} roughness={0.4} />
+        </mesh>
+        {[[-0.18, 0, 0], [0.18, 0, 0], [0, 0.12, 0], [0, -0.22, 0]].map((p, i) => (
+          <mesh key={`door-frame-${i}`} position={p as [number, number, number]}>
+            <boxGeometry args={i < 2 ? [0.018, 0.5, 0.03] : [0.38, 0.018, 0.03]} />
+            <meshStandardMaterial color={frameColor} metalness={0.65} roughness={0.38} />
+          </mesh>
+        ))}
+        <mesh position={[0.11, -0.05, 0.03]}>
+          <sphereGeometry args={[0.018, 8, 8]} />
+          <meshStandardMaterial color="#fbbf24" metalness={0.8} roughness={0.25} />
+        </mesh>
+      </group>
+      {[-D / 2 - 0.015, D / 2 + 0.015].map((x) => (
+        <group key={`vent-${x}`} position={[x, 0.28, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <mesh>
+            <boxGeometry args={[0.32, 0.035, W * 0.58]} />
+            <meshStandardMaterial color="#f8fafc" transparent opacity={offline ? 0.18 : 0.34} roughness={0.72} />
+          </mesh>
+          <mesh position={[0, 0.035, 0]}>
+            <cylinderGeometry args={[0.018, 0.018, W * 0.62, 10]} />
+            <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.4} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* 内部植床 (3 列高垄 + 沟渠 + 滴灌管) */}
+      {[-0.32, 0, 0.32].map((x) => (
+        <group key={x}>
+          <mesh position={[x, 0.13, 0]}>
+            <boxGeometry args={[0.2, 0.06, W - 0.2]} />
+            <meshStandardMaterial color={soilColor} roughness={0.96} />
+          </mesh>
+          <mesh position={[x, 0.166, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.16, W - 0.32]} />
+            <meshStandardMaterial color={pumpOn ? "#2f1a10" : "#6b3b1f"} roughness={1} />
+          </mesh>
+          <mesh position={[x, 0.19, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.006, 0.006, W - 0.22, 6]} />
+            <meshStandardMaterial color={pumpOn ? "#38bdf8" : "#111827"} emissive={pumpOn ? "#0ea5e9" : "#000000"} emissiveIntensity={pumpOn ? 0.25 : 0} />
+          </mesh>
+          {pumpOn && [-0.45, -0.15, 0.15, 0.45].map((z) => (
+            <mesh key={`wet-${x}-${z}`} position={[x, 0.174, z]} rotation={[-Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[0.08, 14]} />
+              <meshBasicMaterial color="#0284c7" transparent opacity={0.22} toneMapped={false} />
+            </mesh>
+          ))}
+        </group>
       ))}
 
       {/* 内部植物（按作物类型种植） */}
@@ -572,10 +633,14 @@ function MiniGreenhouse({
             <sphereGeometry args={[0.18, 16, 16]} />
             <meshBasicMaterial color="#fde047" transparent opacity={0.35} toneMapped={false} />
           </mesh>
-          {/* 地面黄光晕 */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-            <circleGeometry args={[D * 0.55, 24]} />
-            <meshBasicMaterial color="#fde047" transparent opacity={0.22} />
+          {/* 地面暖光与棚内光幕 */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.116, 0]}>
+            <circleGeometry args={[D * 0.6, 28]} />
+            <meshBasicMaterial color="#fde047" transparent opacity={0.24} />
+          </mesh>
+          <mesh position={[0, 0.34, 0]}>
+            <boxGeometry args={[D * 0.76, 0.38, W * 0.72]} />
+            <meshBasicMaterial color="#fde68a" transparent opacity={0.055} depthWrite={false} />
           </mesh>
         </>
       )}
@@ -661,6 +726,10 @@ function MiniGreenhouse({
         {/* 运行时的水滴 */}
         {pumpOn && (
           <>
+            <mesh position={[0, -0.015, -0.05]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.012, 0.012, W - 0.28, 8]} />
+              <meshStandardMaterial color="#22d3ee" emissive="#0891b2" emissiveIntensity={0.45} />
+            </mesh>
             {[0, 1, 2, 3, 4].map((i) => (
               <mesh key={i} position={[0.18 - i * 0.08, -0.02, -0.05]}>
                 <sphereGeometry args={[0.018, 8, 8]} />
@@ -680,6 +749,20 @@ function MiniGreenhouse({
           </>
         )}
       </group>
+
+      {alert && (
+        <group position={[0, 0.1, 0]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+            <ringGeometry args={[0.92, 1.06, 36]} />
+            <meshBasicMaterial color="#ef4444" transparent opacity={0.5} toneMapped={false} />
+          </mesh>
+          <pointLight position={[0, 0.95, 0]} intensity={1.1} distance={2.4} color="#ef4444" />
+          <mesh position={[0, 0.96, 0]}>
+            <sphereGeometry args={[0.06, 12, 12]} />
+            <meshBasicMaterial color="#ef4444" toneMapped={false} />
+          </mesh>
+        </group>
+      )}
 
       {/* 顶部 HTML 标签 */}
       <Html
@@ -816,24 +899,24 @@ function Mountain({ position, scale = 1, color = "#475569" }: { position: [numbe
   );
 }
 
-function Cloud({ position }: { position: [number, number, number] }) {
+function Cloud({ position, color = "#ffffff" }: { position: [number, number, number]; color?: string }) {
   return (
     <group position={position}>
       <mesh>
         <sphereGeometry args={[0.5, 12, 10]} />
-        <meshStandardMaterial color="#ffffff" roughness={1} emissive="#ffffff" emissiveIntensity={0.05} />
+        <meshStandardMaterial color={color} roughness={1} emissive={color} emissiveIntensity={0.05} />
       </mesh>
       <mesh position={[0.5, 0.05, 0]}>
         <sphereGeometry args={[0.4, 12, 10]} />
-        <meshStandardMaterial color="#ffffff" roughness={1} emissive="#ffffff" emissiveIntensity={0.05} />
+        <meshStandardMaterial color={color} roughness={1} emissive={color} emissiveIntensity={0.05} />
       </mesh>
       <mesh position={[-0.45, 0.0, 0.1]}>
         <sphereGeometry args={[0.42, 12, 10]} />
-        <meshStandardMaterial color="#ffffff" roughness={1} emissive="#ffffff" emissiveIntensity={0.05} />
+        <meshStandardMaterial color={color} roughness={1} emissive={color} emissiveIntensity={0.05} />
       </mesh>
       <mesh position={[0.15, 0.25, 0]}>
         <sphereGeometry args={[0.3, 12, 10]} />
-        <meshStandardMaterial color="#ffffff" roughness={1} emissive="#ffffff" emissiveIntensity={0.05} />
+        <meshStandardMaterial color={color} roughness={1} emissive={color} emissiveIntensity={0.05} />
       </mesh>
     </group>
   );
@@ -869,6 +952,83 @@ function Windmill({ position }: { position: [number, number, number] }) {
           <meshStandardMaterial color="#1f2937" />
         </mesh>
       </group>
+    </group>
+  );
+}
+
+function IrrigationCanal({ position, length = 1, rotationY = 0 }: { position: [number, number, number]; length?: number; rotationY?: number }) {
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      <mesh position={[0, 0.012, 0]}>
+        <boxGeometry args={[length, 0.03, 0.18]} />
+        <meshStandardMaterial color="#2f2417" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[length - 0.12, 0.1]} />
+        <meshStandardMaterial color="#0ea5e9" transparent opacity={0.72} roughness={0.18} metalness={0.05} />
+      </mesh>
+    </group>
+  );
+}
+
+function SensorPole({ position, label }: { position: [number, number, number]; label: string }) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.45, 0]} castShadow>
+        <cylinderGeometry args={[0.025, 0.03, 0.9, 8]} />
+        <meshStandardMaterial color="#475569" metalness={0.55} roughness={0.45} />
+      </mesh>
+      <mesh position={[0, 0.92, 0]} castShadow>
+        <boxGeometry args={[0.28, 0.16, 0.08]} />
+        <meshStandardMaterial color="#0f172a" emissive="#22c55e" emissiveIntensity={0.18} roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 1.08, 0]} rotation={[0.25, 0, 0]}>
+        <boxGeometry args={[0.34, 0.02, 0.18]} />
+        <meshStandardMaterial color="#1d4ed8" emissive="#60a5fa" emissiveIntensity={0.08} roughness={0.35} />
+      </mesh>
+      <Html position={[0, 1.25, 0]} center distanceFactor={10} style={{ pointerEvents: "none" }}>
+        <div style={{ color: "#d1fae5", fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(15,23,42,0.72)", border: "1px solid rgba(34,197,94,0.35)", whiteSpace: "nowrap" }}>{label}</div>
+      </Html>
+    </group>
+  );
+}
+
+function WaterTank({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.55, 0]} castShadow>
+        <cylinderGeometry args={[0.34, 0.38, 1.1, 24]} />
+        <meshStandardMaterial color="#94a3b8" metalness={0.35} roughness={0.42} />
+      </mesh>
+      <mesh position={[0, 1.14, 0]} castShadow>
+        <sphereGeometry args={[0.34, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.28} roughness={0.35} />
+      </mesh>
+      <mesh position={[0.42, 0.16, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.025, 0.025, 0.75, 10]} />
+        <meshStandardMaterial color="#0891b2" metalness={0.5} roughness={0.35} />
+      </mesh>
+      <mesh position={[0, 0.02, 0]}>
+        <cylinderGeometry args={[0.46, 0.48, 0.04, 24]} />
+        <meshStandardMaterial color="#52525b" roughness={0.9} />
+      </mesh>
+    </group>
+  );
+}
+
+function FieldPatch({ position, size, color }: { position: [number, number, number]; size: [number, number]; color: string }) {
+  return (
+    <group position={position}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+        <planeGeometry args={size} />
+        <meshStandardMaterial color={color} roughness={0.96} />
+      </mesh>
+      {[-0.35, 0, 0.35].map((x) => (
+        <mesh key={x} rotation={[-Math.PI / 2, 0, 0]} position={[x * size[0], 0.018, 0]}>
+          <planeGeometry args={[0.03, size[1] * 0.92]} />
+          <meshBasicMaterial color="#3f2a18" transparent opacity={0.5} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -949,6 +1109,29 @@ function FarmGround() {
         </mesh>
       ))}
 
+      {/* 分区田块与操作区 */}
+      <FieldPatch position={[-7.8, 0, -3.8]} size={[4.2, 1.5]} color="#4a2f18" />
+      <FieldPatch position={[7.8, 0, -3.8]} size={[4.2, 1.5]} color="#314d1d" />
+      <FieldPatch position={[-7.6, 0, 3.95]} size={[3.8, 1.35]} color="#5b3a1e" />
+      <FieldPatch position={[6.8, 0, 3.9]} size={[2.8, 1.2]} color="#3f6212" />
+      <IrrigationCanal position={[0, 0, -3.55]} length={20.5} />
+      <IrrigationCanal position={[0, 0, 3.85]} length={18.5} />
+      <IrrigationCanal position={[-5.6, 0, 0.2]} length={7.3} rotationY={Math.PI / 2} />
+      <IrrigationCanal position={[5.6, 0, 0.2]} length={7.3} rotationY={Math.PI / 2} />
+      <WaterTank position={[10.0, 0, -3.4]} />
+      <SensorPole position={[-9.2, 0, -3.35]} label="土壤监测" />
+      <SensorPole position={[9.2, 0, 2.7]} label="气象站" />
+      <group position={[-9.4, 0.08, 2.9]}>
+        <mesh castShadow>
+          <boxGeometry args={[0.7, 0.16, 0.42]} />
+          <meshStandardMaterial color="#334155" metalness={0.25} roughness={0.58} />
+        </mesh>
+        <mesh position={[0.22, 0.12, 0]} castShadow>
+          <boxGeometry args={[0.18, 0.12, 0.36]} />
+          <meshStandardMaterial color="#f59e0b" roughness={0.5} />
+        </mesh>
+      </group>
+
       {/* 草丛 */}
       {grassPositions.map((p, i) => (
         <GrassTuft key={i} position={p} />
@@ -981,12 +1164,111 @@ function weatherEmoji(text: string): string {
   if (/晴/.test(text)) return "☀️";
   return "🌤️";
 }
-function WeatherSkyPanel() {
+
+// 天气种类归一化：用于驱动 3D 场景的天空/云/粒子效果
+export type WeatherKind = "sunny" | "cloudy" | "overcast" | "rain" | "storm" | "snow" | "fog";
+export interface WeatherSceneParams {
+  kind: WeatherKind;
+  /** 降水/降雪强度 0..1（小→大→暴） */
+  intensity: number;
+  /** 天空基础色 */
+  skyColor: string;
+  /** 太阳可见度 0..1 */
+  sunOpacity: number;
+  /** 方向光强度倍率 0..1 */
+  lightScale: number;
+  /** 云朵数量上限 */
+  cloudCount: number;
+  /** 云朵颜色 */
+  cloudColor: string;
+  /** 是否启用雾 */
+  fogEnabled: boolean;
+  fogNear: number;
+  fogFar: number;
+  fogColor: string;
+}
+function classifyWeather(text: string | undefined): WeatherKind {
+  if (!text) return "sunny";
+  if (/雪/.test(text)) return "snow";
+  if (/雷|暴雨/.test(text)) return "storm";
+  if (/雨/.test(text)) return "rain";
+  if (/雾|霾|沙|尘/.test(text)) return "fog";
+  if (/阴/.test(text)) return "overcast";
+  if (/多云|少云/.test(text)) return "cloudy";
+  if (/晴/.test(text)) return "sunny";
+  return "cloudy";
+}
+function rainIntensity(text: string | undefined): number {
+  if (!text) return 0.5;
+  if (/暴雨|大暴雨|特大暴雨/.test(text)) return 1.0;
+  if (/大雨|大雪/.test(text)) return 0.85;
+  if (/中雨|中雪/.test(text)) return 0.65;
+  if (/小雨|小雪|阵雨|阵雪|毛毛/.test(text)) return 0.4;
+  return 0.55;
+}
+function weatherSceneParams(text: string | undefined): WeatherSceneParams {
+  const kind = classifyWeather(text);
+  const intensity = kind === "rain" || kind === "storm" || kind === "snow" ? rainIntensity(text) : 0;
+  switch (kind) {
+    case "sunny":
+      return {
+        kind, intensity: 0,
+        skyColor: "#87ceeb", sunOpacity: 1, lightScale: 1,
+        cloudCount: 1, cloudColor: "#ffffff",
+        fogEnabled: false, fogNear: 20, fogFar: 60, fogColor: "#bfdbfe",
+      };
+    case "cloudy":
+      return {
+        kind, intensity: 0,
+        skyColor: "#a7c8e0", sunOpacity: 0.7, lightScale: 0.85,
+        cloudCount: 4, cloudColor: "#f8fafc",
+        fogEnabled: false, fogNear: 20, fogFar: 60, fogColor: "#cbd5e1",
+      };
+    case "overcast":
+      return {
+        kind, intensity: 0,
+        skyColor: "#8a9aab", sunOpacity: 0.15, lightScale: 0.55,
+        cloudCount: 7, cloudColor: "#cbd5e1",
+        fogEnabled: true, fogNear: 18, fogFar: 55, fogColor: "#94a3b8",
+      };
+    case "rain":
+      return {
+        kind, intensity,
+        skyColor: "#6b7785", sunOpacity: 0, lightScale: 0.45,
+        cloudCount: 8, cloudColor: "#94a3b8",
+        fogEnabled: true, fogNear: 14, fogFar: 48, fogColor: "#7a8895",
+      };
+    case "storm":
+      return {
+        kind, intensity,
+        skyColor: "#475569", sunOpacity: 0, lightScale: 0.3,
+        cloudCount: 9, cloudColor: "#64748b",
+        fogEnabled: true, fogNear: 10, fogFar: 40, fogColor: "#64748b",
+      };
+    case "snow":
+      return {
+        kind, intensity,
+        skyColor: "#c9d4de", sunOpacity: 0.25, lightScale: 0.75,
+        cloudCount: 7, cloudColor: "#f1f5f9",
+        fogEnabled: true, fogNear: 16, fogFar: 52, fogColor: "#e2e8f0",
+      };
+    case "fog":
+      return {
+        kind, intensity: 0,
+        skyColor: "#b8c0c8", sunOpacity: 0.1, lightScale: 0.5,
+        cloudCount: 3, cloudColor: "#d1d5db",
+        fogEnabled: true, fogNear: 6, fogFar: 28, fogColor: "#cbd5e1",
+      };
+  }
+}
+
+// 共享的实时天气 Hook：1 小时刷新一次；同时对外暴露 daily / error
+function useQWeatherDaily() {
   const [daily, setDaily] = useState<QWeatherDaily[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let aborted = false;
-    (async () => {
+    const load = async () => {
       try {
         const res = await fetch(
           `${QWEATHER_HOST}/v7/weather/7d?location=${QWEATHER_LOCATION}`,
@@ -1001,12 +1283,24 @@ function WeatherSkyPanel() {
       } catch (e: any) {
         if (!aborted) setError(e?.message ?? "加载失败");
       }
-    })();
+    };
+    load();
+    const timer = window.setInterval(load, 60 * 60 * 1000);
     return () => {
       aborted = true;
+      window.clearInterval(timer);
     };
   }, []);
+  return { daily, error };
+}
 
+function WeatherSkyPanel({
+  daily,
+  error,
+}: {
+  daily: QWeatherDaily[] | null;
+  error: string | null;
+}) {
   return (
     <div
       style={{
@@ -1093,27 +1387,134 @@ function WeatherSkyPanel() {
   );
 }
 
-function SkyAndDistance() {
+function SkyAndDistance({ params }: { params: WeatherSceneParams }) {
+  // 固定的云朵备选位置池；依据当前天气取前 cloudCount 个渲染
+  const cloudPool: [number, number, number][] = [
+    [-6, 5, -3], [3, 6, -4], [7, 5.5, -1], [-4, 5.8, 4],
+    [0, 6.3, -6], [-9, 5.2, 2], [8, 6, 3], [5, 5.4, -7], [-2, 6.5, -5],
+  ];
+  const mountainTint = params.kind === "storm" || params.kind === "rain" || params.kind === "overcast" ? 0.7 : 1.0;
+  const mkColor = (hex: string) => {
+    const c = new THREE.Color(hex);
+    c.multiplyScalar(mountainTint);
+    return `#${c.getHexString()}`;
+  };
   return (
     <group>
-      {/* 天空球 (内表面渐变天空) */}
+      {/* 天空球 (内表面渐变天空) — 颜色随天气变化 */}
       <mesh>
         <sphereGeometry args={[40, 32, 32]} />
-        <meshBasicMaterial color="#87ceeb" side={THREE.BackSide} />
+        <meshBasicMaterial color={params.skyColor} side={THREE.BackSide} />
       </mesh>
       {/* 远处山脉 */}
-      <Mountain position={[-9, 0, -7]} scale={1.6} color="#64748b" />
-      <Mountain position={[-5, 0, -8]} scale={2.0} color="#475569" />
-      <Mountain position={[0, 0, -8.5]} scale={2.4} color="#334155" />
-      <Mountain position={[5, 0, -8]} scale={2.0} color="#475569" />
-      <Mountain position={[9, 0, -7]} scale={1.6} color="#64748b" />
-      {/* 云朵 */}
-      <Cloud position={[-6, 5, -3]} />
-      <Cloud position={[3, 6, -4]} />
-      <Cloud position={[7, 5.5, -1]} />
-      <Cloud position={[-4, 5.8, 4]} />
+      <Mountain position={[-9, 0, -7]} scale={1.6} color={mkColor("#64748b")} />
+      <Mountain position={[-5, 0, -8]} scale={2.0} color={mkColor("#475569")} />
+      <Mountain position={[0, 0, -8.5]} scale={2.4} color={mkColor("#334155")} />
+      <Mountain position={[5, 0, -8]} scale={2.0} color={mkColor("#475569")} />
+      <Mountain position={[9, 0, -7]} scale={1.6} color={mkColor("#64748b")} />
+      {/* 云朵：数量由天气决定 */}
+      {cloudPool.slice(0, params.cloudCount).map((p, i) => (
+        <Cloud key={i} position={p} color={params.cloudColor} />
+      ))}
     </group>
   );
+}
+
+// ============== 降水/降雪粒子系统 ==============
+function PrecipitationParticles({
+  kind,
+  intensity,
+}: {
+  kind: "rain" | "snow";
+  intensity: number;
+}) {
+  const pointsRef = useRef<THREE.Points>(null);
+  const areaX = 30;
+  const areaZ = 22;
+  const topY = 14;
+  const bottomY = 0.2;
+  const count = Math.floor(
+    (kind === "snow" ? 600 : 1400) * Math.max(0.3, Math.min(1, intensity))
+  );
+
+  const { positions, velocities } = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const vel = new Float32Array(count); // 每颗粒独立的下落速度
+    for (let i = 0; i < count; i++) {
+      pos[i * 3 + 0] = (Math.random() - 0.5) * areaX;
+      pos[i * 3 + 1] = bottomY + Math.random() * (topY - bottomY);
+      pos[i * 3 + 2] = (Math.random() - 0.5) * areaZ;
+      vel[i] = kind === "snow"
+        ? 0.6 + Math.random() * 0.8
+        : (6.0 + Math.random() * 4.0) * (0.6 + intensity * 0.8);
+    }
+    return { positions: pos, velocities: vel };
+  }, [count, kind, intensity]);
+
+  useFrame((_, delta) => {
+    const pts = pointsRef.current;
+    if (!pts) return;
+    const geom = pts.geometry as THREE.BufferGeometry;
+    const attr = geom.getAttribute("position") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    const t = performance.now() * 0.001;
+    for (let i = 0; i < count; i++) {
+      const idx = i * 3;
+      arr[idx + 1] -= velocities[i] * delta;
+      if (kind === "snow") {
+        // 雪花横向漂移
+        arr[idx + 0] += Math.sin(t * 0.8 + i) * delta * 0.3;
+        arr[idx + 2] += Math.cos(t * 0.6 + i * 0.7) * delta * 0.2;
+      }
+      if (arr[idx + 1] < bottomY) {
+        arr[idx + 1] = topY;
+        arr[idx + 0] = (Math.random() - 0.5) * areaX;
+        arr[idx + 2] = (Math.random() - 0.5) * areaZ;
+      }
+    }
+    attr.needsUpdate = true;
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          args={[positions, 3]}
+          count={count}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        color={kind === "snow" ? "#ffffff" : "#cbd5e1"}
+        size={kind === "snow" ? 0.12 : 0.06}
+        transparent
+        opacity={kind === "snow" ? 0.95 : 0.65}
+        sizeAttenuation
+        depthWrite={false}
+      />
+    </points>
+  );
+}
+
+// 雷暴闪光（偶发整场亮起）
+function LightningFlash({ active }: { active: boolean }) {
+  const lightRef = useRef<THREE.PointLight>(null);
+  const stateRef = useRef({ nextAt: 0, flashUntil: 0 });
+  useFrame(() => {
+    if (!active || !lightRef.current) {
+      if (lightRef.current) lightRef.current.intensity = 0;
+      return;
+    }
+    const now = performance.now();
+    const st = stateRef.current;
+    if (st.nextAt === 0) st.nextAt = now + 2000 + Math.random() * 6000;
+    if (now > st.nextAt && st.flashUntil < now) {
+      st.flashUntil = now + 120 + Math.random() * 120;
+      st.nextAt = now + 3000 + Math.random() * 8000;
+    }
+    lightRef.current.intensity = now < st.flashUntil ? 4.0 : 0;
+  });
+  return <pointLight ref={lightRef} position={[0, 12, 0]} distance={60} color="#e0f2fe" intensity={0} />;
 }
 
 function PerimeterDecor() {
@@ -1173,11 +1574,13 @@ function FarmScene({
   hoveredName,
   setHoveredName,
   onSelect,
+  weatherParams,
 }: {
   greenhouses: FarmGreenhouse[];
   hoveredName: string | null;
   setHoveredName: (n: string | null) => void;
   onSelect: (name: string) => void;
+  weatherParams: WeatherSceneParams;
 }) {
   // 按大棚数量自适应布局 (2 行, 列数随数量扩展; 1 列居中, 2 列水平相邻)
   // 与原 2×3 硬编码保持一致: [-3.5, 0, 3.5] x [-1.45, 2.55]
@@ -1202,20 +1605,33 @@ function FarmScene({
 
   return (
     <>
-      <ambientLight intensity={1.0} />
-      {/* directionalLight 取消 castShadow：已以 ContactShadows 提供地面 AO，避免阴影通道 */}
-      <directionalLight position={[6, 10, 6]} intensity={1.5} />
-      <directionalLight position={[-6, 8, -4]} intensity={0.5} color="#bee3f8" />
-      <hemisphereLight args={["#dbeafe", "#65a30d", 0.7]} />
-      {/* 太阳本体可见 */}
-      <mesh position={[10, 13, -8]}>
-        <sphereGeometry args={[0.9, 16, 16]} />
-        <meshBasicMaterial color="#fef9c3" toneMapped={false} />
-      </mesh>
+      <ambientLight intensity={0.75 * weatherParams.lightScale + 0.18} />
+      <directionalLight position={[6, 10, 6]} intensity={1.7 * weatherParams.lightScale} color="#fff7ed" />
+      <directionalLight position={[-7, 5, -5]} intensity={0.45 * weatherParams.lightScale} color="#bfdbfe" />
+      <hemisphereLight args={["#dbeafe", "#4d7c0f", 0.85 * weatherParams.lightScale + 0.2]} />
+      {weatherParams.fogEnabled && (
+        <fog attach="fog" args={[weatherParams.fogColor, weatherParams.fogNear, weatherParams.fogFar]} />
+      )}
+      {/* 太阳本体：被云/雨遮蔽时淡出 */}
+      {weatherParams.sunOpacity > 0.02 && (
+        <mesh position={[10, 13, -8]}>
+          <sphereGeometry args={[0.9, 16, 16]} />
+          <meshBasicMaterial color="#fef9c3" toneMapped={false} transparent opacity={weatherParams.sunOpacity} />
+        </mesh>
+      )}
 
-      <SkyAndDistance />
+      <SkyAndDistance params={weatherParams} />
       <PerimeterDecor />
       <FarmGround />
+
+      {/* 实时天气粒子：雨 / 雷暴 / 雪 */}
+      {(weatherParams.kind === "rain" || weatherParams.kind === "storm") && (
+        <PrecipitationParticles kind="rain" intensity={weatherParams.intensity} />
+      )}
+      {weatherParams.kind === "snow" && (
+        <PrecipitationParticles kind="snow" intensity={weatherParams.intensity} />
+      )}
+      <LightningFlash active={weatherParams.kind === "storm"} />
 
       {greenhouses.map((g, i) => {
         const [x, z] = layout[i] ?? [0, 0];
@@ -1232,7 +1648,7 @@ function FarmScene({
         );
       })}
 
-      <ContactShadows position={[0, 0.01, 0]} opacity={0.4} scale={32} blur={2.5} far={6} />
+      <ContactShadows position={[0, 0.01, 0]} opacity={0.5} scale={34} blur={2.1} far={7} />
     </>
   );
 }
@@ -1242,9 +1658,15 @@ function FarmScene({
 // ============================================================
 export function FarmDigitalTwin3D({ greenhouses, onSelect }: Props) {
   const [hoveredName, setHoveredName] = useState<string | null>(null);
-  // 默认开启手势控制，进入页面即可使用
-  const [gestureMode, setGestureMode] = useState(true);
+  // 默认关闭手势控制，由用户手动开启
+  const [gestureMode, setGestureMode] = useState(false);
   const [handStatus, setHandStatus] = useState<"idle" | "tracking" | "lost">("idle");
+  // 实时天气：驱动 3D 场景的天空 / 云朵 / 雨雪 / 光照
+  const { daily: weatherDaily, error: weatherError } = useQWeatherDaily();
+  const weatherParams = useMemo(
+    () => weatherSceneParams(weatherDaily?.[0]?.textDay),
+    [weatherDaily]
+  );
   const orbitRef = useRef<OrbitControlsImpl | null>(null);
   const initialCamPos = useRef<[number, number, number]>([14, 10, 14]);
   const initialTarget = useRef<[number, number, number]>([0, 0.5, 0]);
@@ -1449,7 +1871,8 @@ export function FarmDigitalTwin3D({ greenhouses, onSelect }: Props) {
       style={{
         height: "calc(100vh - 96px)",
         minHeight: 680,
-        background: "linear-gradient(180deg,#87ceeb 0%,#bfdbfe 70%,#dcfce7 100%)",
+        background: `linear-gradient(180deg, ${weatherParams.skyColor} 0%, ${weatherParams.fogColor} 70%, #dcfce7 100%)`,
+        transition: "background 1.2s ease",
       }}
     >
       {/* Header */}
@@ -1506,6 +1929,7 @@ export function FarmDigitalTwin3D({ greenhouses, onSelect }: Props) {
             hoveredName={hoveredName}
             setHoveredName={setHoveredName}
             onSelect={onSelect}
+            weatherParams={weatherParams}
           />
           <OrbitControls
             ref={orbitRef as any}
@@ -1531,7 +1955,7 @@ export function FarmDigitalTwin3D({ greenhouses, onSelect }: Props) {
       )}
 
       {/* 天气大屏：固定 DOM 覆盖层，不随 3D 视角变化 */}
-      <WeatherSkyPanel />
+      <WeatherSkyPanel daily={weatherDaily} error={weatherError} />
 
       {/* 手势模式提示面板 */}
       {gestureMode && (
