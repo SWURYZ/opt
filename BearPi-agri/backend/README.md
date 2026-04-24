@@ -82,7 +82,7 @@ APP_FLYWAY_ENABLED=true
 常用基础连接变量：
 
 ```bash
-SPRING_DATASOURCE_URL=jdbc:mysql://47.108.58.107:3306/dream6?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+SPRING_DATASOURCE_URL=jdbc:mysql://139.155.96.142:3306/dream6?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
 SPRING_DATASOURCE_USERNAME=root
 SPRING_DATASOURCE_PASSWORD=<your-password>
 REDIS_HOST=127.0.0.1

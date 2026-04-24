@@ -255,7 +255,7 @@ export function DeviceManagement() {
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-800">设备管理</h1>
+          <h1 className="text-xl font-bold text-gray-800">设备登记</h1>
           <p className="text-sm text-gray-500 mt-1">按后端真实已绑定设备动态展示各大棚，不再使用本地写死数据</p>
         </div>
         <button

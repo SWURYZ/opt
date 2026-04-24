@@ -145,6 +145,9 @@ public class LinkageDispatchService {
         if ("补光灯".equals(raw) || "LIGHT".equals(normalized)) {
             return "LIGHT_CONTROL";
         }
+        if ("风机".equals(raw) || "风扇".equals(raw) || "FAN".equals(normalized)) {
+            return "MOTOR_CONTROL";
+        }
         if ("灌溉水泵".equals(raw)
                 || "水泵".equals(raw)
                 || "电机".equals(raw)
@@ -169,7 +172,9 @@ public class LinkageDispatchService {
                 || text.contains("灌溉")
                 || text.contains("水泵")
                 || text.contains("马达")
-                || text.contains("电机");
+                || text.contains("电机")
+                || text.contains("风机")
+                || text.contains("风扇");
     }
 
     private Region resolveRegion() {

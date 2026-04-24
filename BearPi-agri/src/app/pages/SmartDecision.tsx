@@ -562,17 +562,17 @@ type NavCommand = {
 };
 
 const NAV_COMMANDS: Array<NavCommand & { aliases: string[] }> = [
-  { to: "/", label: "总览大屏", aliases: ["总览大屏", "总览", "首页", "主页面", "主界面", "大屏"] },
-  { to: "/monitor", label: "实时监测", aliases: ["实时监测", "实时监控", "实时数据", "监测页面"] },
-  { to: "/alerts", label: "阈值告警", aliases: ["阈值告警", "告警页面", "报警页面", "预警页面"] },
-  { to: "/control", label: "设备控制", aliases: ["设备控制", "控制页面", "控制中心", "手动控制"] },
-  { to: "/automation", label: "联动规则", aliases: ["联动规则", "自动化", "规则页面", "联动页面"] },
-  { to: "/history", label: "历史分析", aliases: ["历史分析", "历史数据", "趋势分析", "历史页面"] },
-  { to: "/devices", label: "设备管理", aliases: ["设备管理", "设备页面", "设备列表"] },
-  { to: "/ai", label: "农事问答", aliases: ["农事问答", "问答助手", "AI问答", "智能问答"] },
+  { to: "/", label: "农场总览", aliases: ["农场总览", "总览", "首页", "主页面", "主界面", "大屏"] },
+  { to: "/monitor", label: "大棚实况", aliases: ["大棚实况", "实时监控", "实时数据", "监测页面"] },
+  { to: "/alerts", label: "环境提醒", aliases: ["环境提醒", "提醒页面", "提醒页面", "提醒页面"] },
+  { to: "/control", label: "设备开关", aliases: ["设备开关", "开关页面", "设备开关", "手动开关"] },
+  { to: "/automation", label: "农事方案", aliases: ["农事方案", "自动处理", "方案页面", "方案页面"] },
+  { to: "/history", label: "往期记录", aliases: ["往期记录", "往期数据", "变化趋势", "往期记录"] },
+  { to: "/devices", label: "设备登记", aliases: ["设备登记", "设备登记", "设备列表"] },
+  { to: "/ai", label: "芽芽问答", aliases: ["芽芽问答", "问答助手", "芽芽问答", "芽芽问答"] },
   { to: "/decision", label: "智控决策", aliases: ["智控决策", "决策页面", "芽芽助手", "芽芽"] },
   { to: "/users", label: "用户管理", aliases: ["用户管理", "用户页面", "账号管理"] },
-  { to: "/logs", label: "登录日志", aliases: ["登录日志", "日志页面", "用户日志"] },
+  { to: "/logs", label: "登录记录", aliases: ["登录记录", "记录页面", "用户记录"] },
 ];
 
 function parseNavigationCommand(text: string): NavCommand | null {
@@ -629,7 +629,7 @@ function formatSensorDirectAnswer(snapshot: SensorSnapshot): string {
   const led   = snapshot.ledStatus   ?? "未知";
   const motor = snapshot.motorStatus ?? "未知";
   return `当前大棚温度${temp}，湿度${humi}，光照强度${light}。` +
-    `补光灯${led}，风机${motor}。已为你切换到总览大屏。`;
+    `补光灯${led}，风机${motor}。已为你切换到农场总览。`;
 }
 
 // ─── Intent normalization ────────────────────────────────────────────────────
@@ -1021,7 +1021,7 @@ export function SmartDecision() {
       }
 
       // ── Voice rule creation path (HIGHEST PRIORITY after nav) ──
-      // 规则创建必须在设备控制之前判断，否则"打开下午2点到4点补光灯"会被误判为"立即开灯"
+      // 规则创建必须在设备开关之前判断，否则"打开下午2点到4点补光灯"会被误判为"立即开灯"
       if (isRuleCreationIntent(query) || isRuleCreationIntent(text)) {
         pushThought("意图识别", "规则创建");
         try {
@@ -1031,7 +1031,7 @@ export function SmartDecision() {
           const result = await parseAndCreateRule(ruleInput, deviceIdRef.current);
           const typeLabel =
             result.ruleType === "SCHEDULE" ? "定时规则" :
-            result.ruleType === "LINKAGE"  ? "联动规则" : "阈值告警";
+            result.ruleType === "LINKAGE"  ? "农事方案" : "环境提醒";
           const navTarget =
             result.ruleType === "SCHEDULE" ? "/control" :
             result.ruleType === "LINKAGE"  ? "/automation" : "/alerts";
@@ -1041,7 +1041,7 @@ export function SmartDecision() {
           pushThought(`已${verb} ${typeLabel}`, result.explanation, "result");
           const reply = isCancel
             ? `好的，已为你${result.explanation}。`
-            : `好的，已为你创建${typeLabel}：${result.explanation}。规则已启用，你可以在对应页面查看和管理。`;
+            : `好的，已为你创建${typeLabel}：${result.explanation}。方案已启用，你可以在对应页面查看和管理。`;
           setAiText(reply);
           go("speaking");
           setTimeout(() => navigate(navTarget), 1500);
@@ -1060,7 +1060,7 @@ export function SmartDecision() {
       // ── Device control path: immediate device on/off (no time range) ──
       const cmd = parseDeviceCommand(query);
       if (cmd) {
-        pushThought("意图识别", "设备控制");
+        pushThought("意图识别", "设备开关");
         pushThought("发送指令", `${cmd.label} → ${cmd.action}`);
         try {
           const result = await sendManualControl({

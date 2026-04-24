@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
-  Leaf,
   Eye,
   EyeOff,
   UserPlus,
@@ -182,8 +181,12 @@ export function Login() {
             }
             streamRef.current?.getTracks().forEach((t) => t.stop());
             streamRef.current = null;
-            // 保存人脸 canvas 供表情检测使用
-            setWelcomeCanvas(canvasRef.current);
+            const snapshot = document.createElement("canvas");
+            snapshot.width = canvas.width;
+            snapshot.height = canvas.height;
+            const snapshotCtx = snapshot.getContext("2d");
+            snapshotCtx?.drawImage(canvas, 0, 0);
+            setWelcomeCanvas(snapshot);
             setWelcomeUser(user.displayName || user.username);
           } catch (loginErr) {
             const msg = loginErr instanceof Error ? loginErr.message : "识别失败";
@@ -267,11 +270,16 @@ export function Login() {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-400 rounded-2xl shadow-lg shadow-green-500/30 mb-4">
-            <Leaf className="w-9 h-9 text-green-900" />
+          <div className="inline-flex relative items-center justify-center w-16 h-16 rounded-3xl shadow-lg shadow-green-500/30 mb-4 overflow-hidden"
+            style={{ background: "linear-gradient(135deg, #ecfdf5 0%, #86efac 42%, #16a34a 100%)" }}>
+            <span className="absolute inset-[11px] rounded-[55%_45%_55%_45%] rotate-45 bg-white/95 shadow-inner shadow-green-900/10" />
+            <span className="absolute h-7 w-7 rounded-full bg-gradient-to-br from-emerald-500 to-green-800 shadow-md" />
+            <span className="absolute h-3 w-3 rounded-full bg-lime-200" />
+            <span className="absolute bottom-2 left-1/2 h-5 w-11 -translate-x-1/2 rounded-t-full bg-lime-300/95" />
+            <span className="absolute bottom-3 left-1/2 h-4 w-1 -translate-x-1/2 bg-green-700 rounded-full" />
           </div>
-          <h1 className="text-2xl font-bold text-white">智慧农业大棚</h1>
-          <p className="text-green-300 text-sm mt-1">管理系统 v2.0</p>
+          <h1 className="text-2xl font-bold text-white">农眸</h1>
+          <p className="text-green-300 text-sm mt-1">大棚生态智能管家系统</p>
         </div>
 
         {/* 卡片 */}
@@ -569,7 +577,7 @@ export function Login() {
 
         {/* 底部 */}
         <p className="text-center text-green-400/60 text-xs mt-6">
-          © 2025 智慧农业大棚管理系统
+          © 2025 农眸
         </p>
       </div>
     </div>

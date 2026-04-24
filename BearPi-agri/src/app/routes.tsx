@@ -55,7 +55,8 @@ export const router = createBrowserRouter([
     path: "/",
     Component: AuthLayout,
     children: [
-      { index: true, Component: Dashboard },
+      { index: true, element: <Navigate to="/monitor" replace /> },
+      { path: "dashboard", Component: Dashboard },
       { path: "monitor", Component: RealtimeMonitor },
       { path: "alerts", Component: AlertManagement },
       { path: "control", Component: DeviceControl },

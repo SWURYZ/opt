@@ -2,7 +2,7 @@ import pymysql
 import json
 
 conn = pymysql.connect(
-    host='47.108.58.107', port=3306,
+    host='139.155.96.142', port=3306,
     user='root', password='c0765083cd3f57ab',
     database='dream6', charset='utf8mb4'
 )

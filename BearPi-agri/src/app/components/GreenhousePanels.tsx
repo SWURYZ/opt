@@ -1,6 +1,6 @@
 /**
- * 大棚面板:定时规则 / 阈值规则 / 阈值告警记录
- * 用于实时监测页面中放大大棚的"测量数据下方"按钮弹窗。
+ * 大棚面板:定时规则 / 安全范围 / 环境提醒记录
+ * 用于大棚实况页面中放大大棚的"测量数据下方"按钮弹窗。
  * 所有数据按 deviceId 过滤,使其只展示当前大棚相关内容。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -238,7 +238,7 @@ export function ScheduleRulesModal({ open, deviceId, greenhouseLabel, onClose }:
 }
 
 // ============================================================
-// 2. 阈值规则
+// 2. 安全范围
 // ============================================================
 const METRIC_OPTIONS = [
   { key: "temp", label: "空气温度", unit: "°C" },
@@ -286,7 +286,7 @@ export function ThresholdRulesModal({ open, deviceId, greenhouseLabel, onClose }
   async function handleAdd() {
     if (!deviceId) return;
     if (!draft.threshold || draft.threshold <= 0) {
-      setMsg({ type: "error", text: "阈值必须为正数" });
+      setMsg({ type: "error", text: "安全值必须为正数" });
       return;
     }
     try {
@@ -300,10 +300,10 @@ export function ThresholdRulesModal({ open, deviceId, greenhouseLabel, onClose }
   }
 
   return (
-    <Modal open={open} title={`阈值规则 — ${greenhouseLabel}`} onClose={onClose}>
+    <Modal open={open} title={`安全范围 — ${greenhouseLabel}`} onClose={onClose}>
       {!deviceId && (
         <div className="text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-4">
-          当前大棚未绑定真实设备,阈值规则仅对真实设备生效。
+          当前大棚未绑定真实设备,安全范围仅对真实设备生效。
         </div>
       )}
       {deviceId && (
@@ -344,7 +344,7 @@ export function ThresholdRulesModal({ open, deviceId, greenhouseLabel, onClose }
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">阈值 ({metricMeta(draft.metric).unit})</label>
+                <label className="text-xs text-gray-500 mb-1 block">安全值 ({metricMeta(draft.metric).unit})</label>
                 <input type="number" value={draft.threshold} onChange={(e) => setDraft((p) => ({ ...p, threshold: Number(e.target.value) }))}
                   className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-green-400" />
               </div>
@@ -358,7 +358,7 @@ export function ThresholdRulesModal({ open, deviceId, greenhouseLabel, onClose }
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>{["参数", "条件", "阈值", "状态", ""].map((h) => (
+                <tr>{["参数", "条件", "安全值", "状态", ""].map((h) => (
                   <th key={h} className="text-left text-xs font-medium text-gray-500 px-3 py-2">{h}</th>
                 ))}</tr>
               </thead>
@@ -384,7 +384,7 @@ export function ThresholdRulesModal({ open, deviceId, greenhouseLabel, onClose }
             </table>
             {!loading && rules.length === 0 && (
               <div className="text-center py-10 text-sm text-gray-400 flex flex-col items-center gap-1">
-                <AlertTriangle className="w-8 h-8 opacity-30" />暂无阈值规则
+                <AlertTriangle className="w-8 h-8 opacity-30" />暂无安全范围
               </div>
             )}
             {loading && <div className="text-center py-6 text-sm text-gray-400 flex items-center justify-center gap-2"><Loader className="w-4 h-4 animate-spin" /> 加载中...</div>}
@@ -396,7 +396,7 @@ export function ThresholdRulesModal({ open, deviceId, greenhouseLabel, onClose }
 }
 
 // ============================================================
-// 3. 阈值告警记录
+// 3. 环境提醒记录
 // ============================================================
 interface AlertRecordsModalProps {
   open: boolean;
@@ -438,7 +438,7 @@ export function AlertRecordsModal({ open, deviceId, greenhouseLabel, onClose }: 
   async function handleCheckNow() {
     try {
       await runThresholdCheckNow();
-      setMsg("已触发立即检测");
+      setMsg("已触发立即检查");
       window.setTimeout(load, 600);
     } catch {
       setMsg("触发失败");
@@ -446,10 +446,10 @@ export function AlertRecordsModal({ open, deviceId, greenhouseLabel, onClose }: 
   }
 
   return (
-    <Modal open={open} title={`阈值告警记录 — ${greenhouseLabel}`} onClose={onClose}>
+    <Modal open={open} title={`环境提醒记录 — ${greenhouseLabel}`} onClose={onClose}>
       {!deviceId && (
         <div className="text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-4">
-          当前大棚未绑定真实设备,无告警记录。
+          当前大棚未绑定真实设备,无提醒记录。
         </div>
       )}
       {deviceId && (
@@ -459,18 +459,18 @@ export function AlertRecordsModal({ open, deviceId, greenhouseLabel, onClose }: 
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="bg-white border border-gray-100 rounded-xl p-3 text-center">
               <div className="text-2xl font-bold text-orange-500">{stats.today}</div>
-              <div className="text-xs text-gray-500 mt-0.5">今日告警</div>
+              <div className="text-xs text-gray-500 mt-0.5">今日提醒</div>
             </div>
             <div className="bg-white border border-gray-100 rounded-xl p-3 text-center">
               <div className="text-2xl font-bold text-red-500">{stats.total}</div>
-              <div className="text-xs text-gray-500 mt-0.5">累计告警</div>
+              <div className="text-xs text-gray-500 mt-0.5">累计提醒</div>
             </div>
           </div>
 
           <div className="flex justify-between items-center mb-2">
             <span className="text-xs text-gray-500">设备:<span className="font-mono ml-1">{deviceId}</span></span>
             <div className="flex gap-2">
-              <button onClick={handleCheckNow} className="text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-200 hover:bg-blue-100">立即检测</button>
+              <button onClick={handleCheckNow} className="text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-200 hover:bg-blue-100">立即检查</button>
               <button onClick={load} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500" title="刷新">
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               </button>
@@ -480,7 +480,7 @@ export function AlertRecordsModal({ open, deviceId, greenhouseLabel, onClose }: 
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>{["参数", "条件", "阈值/当前", "时间", "信息"].map((h) => (
+                <tr>{["参数", "条件", "安全范围/当前", "时间", "信息"].map((h) => (
                   <th key={h} className="text-left text-xs font-medium text-gray-500 px-3 py-2">{h}</th>
                 ))}</tr>
               </thead>
@@ -501,7 +501,7 @@ export function AlertRecordsModal({ open, deviceId, greenhouseLabel, onClose }: 
             </table>
             {!loading && records.length === 0 && (
               <div className="text-center py-10 text-sm text-gray-400 flex flex-col items-center gap-1">
-                <AlertTriangle className="w-8 h-8 opacity-30" />暂无告警记录
+                <AlertTriangle className="w-8 h-8 opacity-30" />暂无提醒记录
               </div>
             )}
             {loading && <div className="text-center py-6 text-sm text-gray-400 flex items-center justify-center gap-2"><Loader className="w-4 h-4 animate-spin" /> 加载中...</div>}

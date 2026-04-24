@@ -1,7 +1,7 @@
 
-# 智慧农业大棚前端
+# 农眸前端
 
-该项目基于 Vite + React + Tailwind CSS，用于智慧农业大棚系统前端展示。
+该项目基于 Vite + React + Tailwind CSS，用于农眸系统前端展示。
 
 ## 1. 本地编译与预览环境
 

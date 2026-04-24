@@ -14,6 +14,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.time.Duration;
@@ -33,6 +34,14 @@ public class CozeAgentService {
     private final ObjectMapper objectMapper;
 
     public Flux<AgentChunk> streamChat(AgriAgentChatRequest request) {
+        return streamChat(request, null);
+    }
+
+    public Flux<AgentChunk> streamChatWithImage(AgriAgentChatRequest request, String imageUrl) {
+        return streamChat(request, imageUrl);
+    }
+
+    private Flux<AgentChunk> streamChat(AgriAgentChatRequest request, String imageUrl) {
         validateConfig();
 
         WebClient webClient = WebClient.builder()
@@ -47,7 +56,7 @@ public class CozeAgentService {
 
         return webClient.post()
                 .uri(properties.getChatPath())
-                .bodyValue(buildPayload(request))
+                .bodyValue(buildPayload(request, imageUrl))
                 .retrieve()
                 .bodyToFlux(SSE_STRING_TYPE)
                 .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
@@ -63,7 +72,7 @@ public class CozeAgentService {
                 .map(StringBuilder::toString);
     }
 
-    private Map<String, Object> buildPayload(AgriAgentChatRequest request) {
+    private Map<String, Object> buildPayload(AgriAgentChatRequest request, String imageUrl) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("bot_id", properties.getBotId());
         payload.put("user_id",
@@ -75,10 +84,19 @@ public class CozeAgentService {
             payload.put("conversation_id", request.conversationId());
         }
 
+        String content = request.question();
+        if (StringUtils.hasText(imageUrl)) {
+            try {
+                content = objectMapper.writeValueAsString(Map.of("text", request.question(), "url", imageUrl));
+            } catch (IOException err) {
+                throw new IllegalStateException("failed to build image question payload", err);
+            }
+        }
+
         payload.put("additional_messages", List.of(
                 Map.of(
                         "role", "user",
-                        "content", request.question(),
+                        "content", content,
                         "content_type", "text")));
 
         return payload;

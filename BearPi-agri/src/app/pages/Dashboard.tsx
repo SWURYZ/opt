@@ -165,7 +165,7 @@ const trendData = [
   { time: "23:59", temp: 22, humidity: 66 },
 ];
 
-/** 与 RealtimeMonitor 保持一致的多大棚模拟偏移，让总览大屏与「实时检测」看到的数据一致 */
+/** 与 RealtimeMonitor 保持一致的多大棚模拟偏移，让农场总览与「实时检测」看到的数据一致 */
 const SIM_OFFSETS: Record<string, { temp?: number; humidity?: number; light?: number; co2?: number }> = {
   "GH-02": { temp: 1.2, humidity: -3, light: -0.05, co2: 20 },
   "GH-03": { temp: -0.8, humidity: 4, light: 0.05, co2: -15 },
@@ -231,7 +231,7 @@ function recordToAlertItem(r: ThresholdAlertRecord): AlertItem {
   const label = METRIC_LABEL[r.metric] ?? r.metric;
   const unit = METRIC_UNIT[r.metric] ?? "";
   const direction = r.operator === "ABOVE" ? "过高" : "过低";
-  // 严重程度估算：超出阈值 ≥ 20% 计为 danger，其余 warn
+  // 严重程度估算：超出安全值 ≥ 20% 计为 danger，其余 warn
   const ratio = r.threshold === 0 ? 0 : Math.abs((r.currentValue - r.threshold) / r.threshold);
   const level: AlertItem["level"] = ratio >= 0.2 ? "danger" : "warn";
   return {
@@ -305,7 +305,7 @@ export function Dashboard() {
       } catch {
         /* ignore */
       }
-      // 3) 拉阈值告警记录，同步与「实时检测 / 告警管理」内容一致
+      // 3) 拉环境提醒记录，同步与「实时检测 / 告警管理」内容一致
       let alertItems: AlertItem[] = [];
       const alertsCountByGh: Record<string, number> = {};
       try {
@@ -552,7 +552,7 @@ export function Dashboard() {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-gray-800">今日温湿度趋势（全场均值）</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">业务六：历史数据趋势分析</p>
+                    <p className="text-xs text-gray-400 mt-0.5">业务六：往期数据变化趋势</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-500">
@@ -601,7 +601,7 @@ export function Dashboard() {
               <div className="space-y-2 flex-1 overflow-y-auto pr-1">
                 {alertsData.length === 0 && (
                   <div className="text-center text-xs text-gray-400 py-8">
-                    暂无未处理告警 · 与「实时检测 / 阈值告警」实时同步
+                    暂无未处理告警 · 与「实时检测 / 环境提醒」实时同步
                   </div>
                 )}
                 {alertsData.map((alert, i) => (

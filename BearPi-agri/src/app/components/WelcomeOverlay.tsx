@@ -19,6 +19,7 @@ export function WelcomeOverlay({ displayName, faceCanvas, onDone }: Props) {
   const [exiting, setExiting] = useState(false);
   const [exprResult, setExprResult] = useState<ExpressionResult | null>(null);
   const [exprVisible, setExprVisible] = useState(false);
+  const [detectDone, setDetectDone] = useState(false);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
@@ -36,10 +37,14 @@ export function WelcomeOverlay({ displayName, faceCanvas, onDone }: Props) {
         }
         if (!cancelled) {
           setExprResult(result);
+          setDetectDone(true);
           setTimeout(() => { if (!cancelled) setExprVisible(true); }, 80);
         }
       } catch {
-        if (!cancelled) setExprVisible(true);
+        if (!cancelled) {
+          setDetectDone(true);
+          setExprVisible(true);
+        }
       }
     }
 
@@ -50,10 +55,10 @@ export function WelcomeOverlay({ displayName, faceCanvas, onDone }: Props) {
   useEffect(() => {
     const expression = exprResult?.expression ?? "neutral";
     const config = EXPRESSION_CONFIG[expression];
-    const delay = exprResult ? 100 : 1500;
+    const delay = detectDone ? 100 : 900;
     const speakTimer = setTimeout(() => { speak(config.speech(displayName)); }, delay);
     return () => clearTimeout(speakTimer);
-  }, [exprResult, displayName]);
+  }, [exprResult, detectDone, displayName]);
 
   useEffect(() => {
     const exitTimer = setTimeout(() => setExiting(true), 3200);

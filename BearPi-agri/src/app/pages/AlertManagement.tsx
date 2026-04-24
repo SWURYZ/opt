@@ -253,7 +253,7 @@ export function AlertManagement() {
         await loadAll();
       } catch (err) {
         if (!stopped) {
-          const msg = err instanceof Error ? err.message : "阈值告警数据加载失败。";
+          const msg = err instanceof Error ? err.message : "环境提醒数据加载失败。";
           showMessage("error", msg);
         }
       } finally {
@@ -358,7 +358,7 @@ export function AlertManagement() {
       } else {
         const source = rules.find((r) => r.key === pendingOverwrite.sourceKey);
         if (!source) {
-          showMessage("error", "原规则不存在，请刷新后重试。");
+          showMessage("error", "原方案不存在，请刷新后重试。");
           setPendingOverwrite(null);
           return;
         }
@@ -368,7 +368,7 @@ export function AlertManagement() {
       await loadAll();
       showMessage("success", "已覆盖重复规则并保存。");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "覆盖规则失败。";
+      const msg = err instanceof Error ? err.message : "覆盖方案失败。";
       showMessage("error", msg);
     } finally {
       setPendingOverwrite(null);
@@ -380,9 +380,9 @@ export function AlertManagement() {
       await runThresholdCheckNow();
       const data = await fetchThresholdAlertRecords();
       setRecords(data);
-      showMessage("success", "已执行阈值检测。");
+      showMessage("success", "已执行环境检查。");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "执行阈值检测失败。";
+      const msg = err instanceof Error ? err.message : "执行环境检查失败。";
       showMessage("error", msg);
     }
   }
@@ -393,7 +393,7 @@ export function AlertManagement() {
       return;
     }
     if (newRule.minThreshold < 0 || newRule.maxThreshold <= 0) {
-      showMessage("error", "阈值范围不合法。");
+      showMessage("error", "安全范围不合法。");
       return;
     }
 
@@ -413,7 +413,7 @@ export function AlertManagement() {
       setShowAddRule(false);
       showMessage("success", "区间规则已创建。");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "创建规则失败。";
+      const msg = err instanceof Error ? err.message : "创建方案失败。";
       showMessage("error", msg);
     }
   }
@@ -425,7 +425,7 @@ export function AlertManagement() {
       return;
     }
     if (!current) {
-      showMessage("error", "规则不存在。请刷新后重试。");
+      showMessage("error", "方案不存在。请刷新后重试。");
       return;
     }
     if (draft.maxThreshold <= draft.minThreshold) {
@@ -433,7 +433,7 @@ export function AlertManagement() {
       return;
     }
     if (draft.minThreshold < 0 || draft.maxThreshold <= 0) {
-      showMessage("error", "阈值范围不合法。");
+      showMessage("error", "安全范围不合法。");
       return;
     }
 
@@ -452,9 +452,9 @@ export function AlertManagement() {
       await saveRangeByDraft(draft, current);
 
       await loadAll();
-      showMessage("success", "规则已保存。");
+      showMessage("success", "方案已保存。");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "保存规则失败。";
+      const msg = err instanceof Error ? err.message : "保存方案失败。";
       showMessage("error", msg);
     }
   }
@@ -475,9 +475,9 @@ export function AlertManagement() {
       }
       await Promise.all(tasks);
       await loadAll();
-      showMessage("success", row.enabled ? "规则已停用。" : "规则已启用。");
+      showMessage("success", row.enabled ? "方案已停用。" : "方案已启用。");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "切换规则状态失败。";
+      const msg = err instanceof Error ? err.message : "切换方案状态失败。";
       showMessage("error", msg);
     }
   }
@@ -502,9 +502,9 @@ export function AlertManagement() {
       }
       await Promise.all(tasks);
       await loadAll();
-      showMessage("success", "规则已删除。");
+      showMessage("success", "方案已删除。");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "删除规则失败。";
+      const msg = err instanceof Error ? err.message : "删除方案失败。";
       showMessage("error", msg);
     } finally {
       setPendingDeleteKey(null);
@@ -520,10 +520,10 @@ export function AlertManagement() {
 
   function exportRecords() {
     if (records.length === 0) {
-      showMessage("error", "没有可导出的告警记录。");
+      showMessage("error", "没有可导出的提醒记录。");
       return;
     }
-    const headers = ["记录ID", "规则ID", "设备ID", "参数", "比较方式", "阈值", "当前值", "告警时间", "告警信息"];
+    const headers = ["记录ID", "规则ID", "设备ID", "参数", "比较方式", "安全值", "当前值", "告警时间", "提醒信息"];
     const rows = records.map((r) => [
       String(r.id),
       String(r.ruleId),
@@ -580,7 +580,7 @@ export function AlertManagement() {
 
       <SimpleModal
         open={pendingOverwrite != null}
-        title="发现重复规则"
+        title="发现重复方案"
         description={pendingOverwrite
           ? `${greenhouseLabel(pendingOverwrite.target.greenhouseNo)} - ${metricLabel(
               pendingOverwrite.target.metric
@@ -605,15 +605,15 @@ export function AlertManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            阈值告警与审计
+            环境提醒
             {unhandled > 0 && (
               <span className="flex items-center gap-1 text-sm bg-red-100 text-red-600 px-2.5 py-0.5 rounded-full">
                 <Bell className="w-3.5 h-3.5" />
-                {unhandled} 条告警
+                {unhandled} 条提醒
               </span>
             )}
           </h1>
-          <p className="text-xs text-gray-400 mt-1">当阈值被触发时，服务会每5秒切换一次LED开关（ON/OFF）实现闪烁。</p>
+          <p className="text-xs text-gray-400 mt-1">当环境超出安全范围时，服务会每5秒切换一次LED开关（ON/OFF）实现闪烁。</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -621,14 +621,14 @@ export function AlertManagement() {
             className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600"
           >
             <Zap className="w-4 h-4" />
-            立即检测
+            立即检查
           </button>
           <button
             onClick={exportRecords}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
           >
             <Download className="w-4 h-4" />
-            导出告警
+            导出提醒
           </button>
         </div>
       </div>
@@ -640,7 +640,7 @@ export function AlertManagement() {
             activeTab === "records" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          告警记录
+          提醒记录
         </button>
         <button
           onClick={() => setActiveTab("settings")}
@@ -648,7 +648,7 @@ export function AlertManagement() {
             activeTab === "settings" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          阈值规则
+          安全范围
         </button>
       </div>
 
@@ -657,19 +657,19 @@ export function AlertManagement() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm text-center">
               <div className="text-2xl font-bold text-gray-700">{todayCount}</div>
-              <div className="text-xs text-gray-500 mt-0.5">今日告警</div>
+              <div className="text-xs text-gray-500 mt-0.5">今日提醒</div>
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm text-center">
               <div className="text-2xl font-bold text-red-500">{records.length}</div>
-              <div className="text-xs text-gray-500 mt-0.5">累计告警</div>
+              <div className="text-xs text-gray-500 mt-0.5">累计提醒</div>
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm text-center">
               <div className="text-2xl font-bold text-green-500">{rules.filter((r) => r.enabled).length}</div>
-              <div className="text-xs text-gray-500 mt-0.5">启用规则</div>
+              <div className="text-xs text-gray-500 mt-0.5">启用方案</div>
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm text-center">
               <div className="text-2xl font-bold text-gray-700">{rules.length}</div>
-              <div className="text-xs text-gray-500 mt-0.5">规则总数</div>
+              <div className="text-xs text-gray-500 mt-0.5">方案总数</div>
             </div>
           </div>
 
@@ -677,7 +677,7 @@ export function AlertManagement() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {["记录ID", "规则ID", "设备ID", "参数", "比较", "阈值/当前", "时间", "信息"].map((h) => (
+                  {["记录ID", "规则ID", "设备ID", "参数", "比较", "安全范围/当前", "时间", "信息"].map((h) => (
                     <th key={h} className="text-left text-xs font-medium text-gray-500 px-4 py-3">{h}</th>
                   ))}
                 </tr>
@@ -707,7 +707,7 @@ export function AlertManagement() {
             {!loading && records.length === 0 && (
               <div className="text-center py-12 text-gray-400">
                 <AlertTriangle className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">暂无告警记录。</p>
+                <p className="text-sm">暂无提醒记录。</p>
               </div>
             )}
           </div>
@@ -718,7 +718,7 @@ export function AlertManagement() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-700">阈值区间配置</p>
+              <p className="text-sm font-medium text-gray-700">安全范围设置</p>
               <p className="text-xs text-gray-500 mt-1">先选大棚与参数，再设置最小值和最大值，超出区间自动触发告警。</p>
             </div>
             <button
@@ -726,13 +726,13 @@ export function AlertManagement() {
               className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 shadow-sm"
             >
               <Plus className="w-4 h-4" />
-              添加规则
+              添加方案
             </button>
           </div>
 
           {showAddRule && (
             <div className="bg-white rounded-xl border border-green-200 p-4 shadow-sm">
-              <h4 className="text-sm font-semibold text-gray-800 mb-3">新建阈值规则</h4>
+              <h4 className="text-sm font-semibold text-gray-800 mb-3">新建安全范围</h4>
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-3">
                   <label className="text-xs text-gray-500 mb-1 block">大棚号</label>
@@ -964,7 +964,7 @@ export function AlertManagement() {
           {!loading && rules.length === 0 && (
             <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-gray-100">
               <X className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">暂无阈值规则，请先创建规则开始监测。</p>
+              <p className="text-sm">暂无安全范围，请先创建方案开始监测。</p>
             </div>
           )}
         </div>

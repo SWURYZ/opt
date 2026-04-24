@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { Activity, Wifi, ChevronLeft, Lightbulb, Fan, Loader2, Droplets, Clock, SlidersHorizontal, AlertTriangle, Plus, Trash2, X } from "lucide-react";
 import {
   SENSOR_KEYS,
@@ -352,6 +353,8 @@ function MiniGH({ name, crop, connectionMode, sensorValues: sv, ledOn, motorOn, 
 
 
 export function RealtimeMonitor() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   // 大棚清单 (localStorage 持久化, 支持增删改作物)
   const { list: ghList, addGreenhouse, removeGreenhouse, updateCrop, canAdd } = useGreenhouses();
   const GREENHOUSE_LIST = useMemo(() => ghList.map((g) => g.name), [ghList]);
@@ -417,7 +420,7 @@ export function RealtimeMonitor() {
     updateVirtualSwitch(gh, { [key]: !cur[key] });
   }
 
-  // 弹窗开关:定时规则 / 阈值规则 / 告警记录
+  // 弹窗开关:定时规则 / 安全范围 / 提醒记录
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [thresholdOpen, setThresholdOpen] = useState(false);
   const [alertRecOpen, setAlertRecOpen] = useState(false);
@@ -428,6 +431,14 @@ export function RealtimeMonitor() {
       setFocusedGH(null);
     }
   }, [focusedGH, GREENHOUSE_LIST]);
+
+  // URL 参数：从农场总览点击大棚列表跳转到 /monitor?gh=... 后直接聚焦对应大棚
+  useEffect(() => {
+    const gh = searchParams.get("gh");
+    if (!gh || !GREENHOUSE_LIST.includes(gh)) return;
+    setFocusedGH(gh);
+    navigate("/monitor", { replace: true });
+  }, [GREENHOUSE_LIST, navigate, searchParams]);
 
   // 监听芽芽语音指令："聚焦/查看 N 号大棚" → 切到详情视图
   useEffect(() => {
@@ -562,7 +573,7 @@ export function RealtimeMonitor() {
   //   避免硬件离线/云端异常时,旧 telemetry 把 UI 拉回旧状态.
   async function toggleLed() {
     if (!deviceId || ledLoading) {
-      if (!deviceId) setControlMessage({ type: "error", text: "未绑定设备,请先在【设备管理】扫码绑定" });
+      if (!deviceId) setControlMessage({ type: "error", text: "未绑定设备,请先在【设备登记】扫码绑定" });
       return;
     }
     const target = !ledOn;
@@ -607,7 +618,7 @@ export function RealtimeMonitor() {
   }
   async function toggleMotor() {
     if (!deviceId || motorLoading) {
-      if (!deviceId) setControlMessage({ type: "error", text: "未绑定设备,请先在【设备管理】扫码绑定" });
+      if (!deviceId) setControlMessage({ type: "error", text: "未绑定设备,请先在【设备登记】扫码绑定" });
       return;
     }
     const target = !motorOn;
@@ -652,7 +663,7 @@ export function RealtimeMonitor() {
   // · 虚拟场景中 waterOn 与 motorOn 独立显示 (分别控制水泵动画与风扇动画)
   async function toggleWater() {
     if (!deviceId) {
-      setControlMessage({ type: "error", text: "未绑定设备,请先在【设备管理】扫码绑定" });
+      setControlMessage({ type: "error", text: "未绑定设备,请先在【设备登记】扫码绑定" });
       return;
     }
     if (motorLoading) return;
@@ -791,14 +802,14 @@ export function RealtimeMonitor() {
           waterOn={ghWaterOn}
         />
 
-        {/* 测量数据下方 — 定时规则 / 阈值规则 / 告警记录 入口按钮 */}
+        {/* 测量数据下方 — 定时规则 / 安全范围 / 提醒记录 入口按钮 */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm font-semibold text-gray-800">设备规则与告警</h3>
               <p className="text-xs text-gray-500 mt-0.5">
                 {isOnline
-                  ? `针对当前大棚设备 ${deviceId || "未绑定"} 的定时控制、阈值告警与记录查看。`
+                  ? `针对当前大棚设备 ${deviceId || "未绑定"} 的定时控制、环境提醒与记录查看。`
                   : "当前为虚拟大棚,接入真实设备后可使用。"}
               </p>
             </div>
@@ -814,7 +825,7 @@ export function RealtimeMonitor() {
               </div>
               <div className="text-left flex-1 min-w-0">
                 <div className="text-sm font-semibold text-gray-800">定时规则</div>
-                <div className="text-xs text-gray-500 truncate">补光灯 / 灬溉自动定时</div>
+                <div className="text-xs text-gray-500 truncate">补光灯 / 灌溉自动定时</div>
               </div>
             </button>
 
@@ -827,7 +838,7 @@ export function RealtimeMonitor() {
                 <SlidersHorizontal className="w-5 h-5 text-emerald-600" />
               </div>
               <div className="text-left flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-800">阈值规则</div>
+                <div className="text-sm font-semibold text-gray-800">安全范围</div>
                 <div className="text-xs text-gray-500 truncate">温度 / 湿度 / 光照 / CO2 超限告警</div>
               </div>
             </button>
@@ -841,8 +852,8 @@ export function RealtimeMonitor() {
                 <AlertTriangle className="w-5 h-5 text-rose-600" />
               </div>
               <div className="text-left flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-800">告警记录</div>
-                <div className="text-xs text-gray-500 truncate">查看历史阈值超限记录</div>
+                <div className="text-sm font-semibold text-gray-800">提醒记录</div>
+                <div className="text-xs text-gray-500 truncate">查看历史安全值超限记录</div>
               </div>
             </button>
           </div>

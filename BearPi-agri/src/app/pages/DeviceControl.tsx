@@ -225,7 +225,7 @@ export function DeviceControl() {
       if (key === "water") updateVirtualSwitch(ghName, { water: !now.water });
       setControlStates((prev) => ({
         ...prev,
-        [ghName]: { ...(prev[ghName] ?? defaultGhState()), feedback: "虚拟设备已切换（与实时监测同步）" },
+        [ghName]: { ...(prev[ghName] ?? defaultGhState()), feedback: "虚拟设备已切换（与大棚实况同步）" },
       }));
       return;
     }
@@ -297,7 +297,7 @@ export function DeviceControl() {
 
   async function addTimer() {
     if (!selectedTimerDeviceId) {
-      setTimerMessage({ type: "error", text: "当前大棚未绑定设备，请先到设备管理进行绑定" });
+      setTimerMessage({ type: "error", text: "当前大棚未绑定设备，请先到设备登记进行绑定" });
       window.setTimeout(() => setTimerMessage(null), 2600);
       return;
     }
@@ -348,7 +348,7 @@ export function DeviceControl() {
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-5">
       <div>
-        <h1 className="text-xl font-bold text-gray-800">设备远程控制</h1>
+        <h1 className="text-xl font-bold text-gray-800">设备远程开关</h1>
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
@@ -359,7 +359,7 @@ export function DeviceControl() {
           }`}
         >
           <Power className="w-4 h-4" />
-          手动控制
+          手动开关
         </button>
         <button
           onClick={() => setActiveTab("timer")}
@@ -368,7 +368,7 @@ export function DeviceControl() {
           }`}
         >
           <Clock className="w-4 h-4" />
-          定时规则
+          定时安排
         </button>
       </div>
 
@@ -398,7 +398,7 @@ export function DeviceControl() {
 
                   {!binding && (
                     <div className="text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-3 mb-3">
-                      当前为虚拟设备控制（可直接本地开关）。如需控制真实硬件，请先前往设备管理扫码绑定。
+                      当前为虚拟设备开关（可直接本地开关）。如需控制真实硬件，请先前往设备登记扫码绑定。
                     </div>
                   )}
 
@@ -496,12 +496,12 @@ export function DeviceControl() {
             <div className="text-green-500">⏰</div>
             <div className="text-xs text-green-700">
               <span className="font-medium">定时控制：</span>
-              请选择大棚后管理其绑定设备的定时规则。
+              请选择大棚后管理其绑定设备的定时安排。
             </div>
           </div>
 
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h3 className="text-sm font-semibold text-gray-700">定时规则列表</h3>
+            <h3 className="text-sm font-semibold text-gray-700">定时安排列表</h3>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">大棚：</span>
               <select
@@ -527,13 +527,13 @@ export function DeviceControl() {
 
           {!selectedTimerDeviceId && (
             <div className="text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-4">
-              当前大棚未绑定设备，暂不可配置定时规则。
+              当前大棚未绑定设备，暂不可配置定时安排。
             </div>
           )}
 
           {showAddTimer && selectedTimerDeviceId && (
             <div className="bg-white rounded-xl border-2 border-green-300 p-5 shadow-sm">
-              <h4 className="text-sm font-semibold text-gray-800 mb-4">新增定时规则</h4>
+              <h4 className="text-sm font-semibold text-gray-800 mb-4">新增定时安排</h4>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 mb-1.5 block">控制类型</label>
@@ -650,7 +650,7 @@ export function DeviceControl() {
             </table>
             {timerRows.length === 0 && (
               <div className="text-center py-10 text-gray-400 text-sm">
-                {selectedTimerDeviceId ? "暂无定时规则，点击「新增规则」添加" : "当前大棚未绑定设备，暂无可展示规则"}
+                {selectedTimerDeviceId ? "暂无定时安排，点击「新增规则」添加" : "当前大棚未绑定设备，暂无可展示规则"}
               </div>
             )}
           </div>

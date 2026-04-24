@@ -789,6 +789,118 @@ function CropField({ crop, ledOn }: { crop: string; ledOn: boolean }) {
   );
 }
 
+function FieldTree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.42, 0]} castShadow>
+        <cylinderGeometry args={[0.07, 0.11, 0.84, 8]} />
+        <meshStandardMaterial color="#7c2d12" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.96, 0]} castShadow>
+        <coneGeometry args={[0.5, 1.05, 10]} />
+        <meshStandardMaterial color="#166534" roughness={0.85} />
+      </mesh>
+      <mesh position={[0, 1.34, 0]} castShadow>
+        <coneGeometry args={[0.38, 0.82, 10]} />
+        <meshStandardMaterial color="#15803d" roughness={0.85} />
+      </mesh>
+    </group>
+  );
+}
+
+function FenceLine({ z }: { z: number }) {
+  const posts = [-6.4, -4.8, -3.2, -1.6, 0, 1.6, 3.2, 4.8, 6.4];
+  return (
+    <group>
+      {posts.map((x) => (
+        <mesh key={x} position={[x, 0.35, z]} castShadow>
+          <boxGeometry args={[0.08, 0.7, 0.08]} />
+          <meshStandardMaterial color="#6b4f2a" roughness={0.8} />
+        </mesh>
+      ))}
+      {[0.48, 0.25].map((y) => (
+        <mesh key={y} position={[0, y, z]} castShadow>
+          <boxGeometry args={[13.1, 0.06, 0.05]} />
+          <meshStandardMaterial color="#8b6f3e" roughness={0.82} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function SceneDecorations() {
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.035, 0]} receiveShadow>
+        <planeGeometry args={[24, 17]} />
+        <meshStandardMaterial color="#2f6b2f" roughness={0.95} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.028, 4.15]} receiveShadow>
+        <planeGeometry args={[18, 1.35]} />
+        <meshStandardMaterial color="#8b7355" roughness={0.96} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-4.35, -0.025, 0.4]} receiveShadow>
+        <planeGeometry args={[1.05, 7.2]} />
+        <meshStandardMaterial color="#9a8262" roughness={0.96} />
+      </mesh>
+      {[-2.4, 0, 2.4].map((z) => (
+        <mesh key={z} position={[-2.45, 0.035, z]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.035, 0.035, 4.9, 12]} />
+          <meshStandardMaterial color="#1d4ed8" roughness={0.55} metalness={0.1} />
+        </mesh>
+      ))}
+      {[[-1.6, 2.85], [0, 2.85], [1.6, 2.85], [-1.6, -2.85], [0, -2.85], [1.6, -2.85]].map(([x, z], i) => (
+        <mesh key={i} position={[x, 0.04, z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.08, 0.11, 18]} />
+          <meshBasicMaterial color="#38bdf8" transparent opacity={0.55} toneMapped={false} />
+        </mesh>
+      ))}
+      <FenceLine z={-4.65} />
+      <FenceLine z={5.15} />
+      <FieldTree position={[-7.4, 0, -3.9]} scale={1.1} />
+      <FieldTree position={[7.2, 0, -4.25]} scale={0.95} />
+      <FieldTree position={[7.6, 0, 4.55]} scale={1.05} />
+      <FieldTree position={[-7.7, 0, 4.75]} scale={0.9} />
+      <group position={[3.95, 0, 2.95]}>
+        <mesh position={[0, 0.75, 0]} castShadow>
+          <cylinderGeometry args={[0.45, 0.5, 1.5, 24]} />
+          <meshStandardMaterial color="#64748b" roughness={0.35} metalness={0.35} />
+        </mesh>
+        <mesh position={[0, 1.56, 0]} castShadow>
+          <sphereGeometry args={[0.47, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color="#94a3b8" roughness={0.32} metalness={0.35} />
+        </mesh>
+        <mesh position={[0, 0.84, 0.49]}>
+          <boxGeometry args={[0.28, 0.18, 0.025]} />
+          <meshStandardMaterial color="#0ea5e9" emissive="#0284c7" emissiveIntensity={0.18} />
+        </mesh>
+      </group>
+      <group position={[-3.8, 0, 2.55]}>
+        <mesh position={[0, 0.55, 0]} castShadow>
+          <boxGeometry args={[0.62, 1.1, 0.36]} />
+          <meshStandardMaterial color="#1f2937" roughness={0.6} metalness={0.25} />
+        </mesh>
+        <mesh position={[0, 0.72, 0.19]}>
+          <boxGeometry args={[0.42, 0.44, 0.025]} />
+          <meshStandardMaterial color="#064e3b" emissive="#22c55e" emissiveIntensity={0.22} />
+        </mesh>
+        {[0.08, -0.08].map((x) => (
+          <mesh key={x} position={[x, 0.38, 0.21]}>
+            <sphereGeometry args={[0.035, 10, 8]} />
+            <meshStandardMaterial color={x > 0 ? "#22c55e" : "#facc15"} emissive={x > 0 ? "#22c55e" : "#facc15"} emissiveIntensity={0.7} />
+          </mesh>
+        ))}
+      </group>
+      {[[-5.6, 4.05], [-5.05, 4.1], [-5.32, 3.55]].map(([x, z], i) => (
+        <mesh key={i} position={[x, 0.16, z]} rotation={[0, i * 0.4, 0]} castShadow>
+          <boxGeometry args={[0.45, 0.32, 0.38]} />
+          <meshStandardMaterial color="#a16207" roughness={0.9} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 // ============================================================
 // 主场景（在 Canvas 内）
 // ============================================================
@@ -817,6 +929,9 @@ function Scene({
       <directionalLight position={[0, 6, -6]} intensity={0.6} color="#fef3c7" />
       {/* 半球光让暗部不至于死黑 */}
       <hemisphereLight args={["#dbeafe", "#65a30d", 1.0]} />
+
+      {/* 场景外部环境 */}
+      <SceneDecorations />
 
       {/* 大棚结构 */}
       <GreenhouseShell alert={alert} />
@@ -990,8 +1105,9 @@ export function GreenhouseDigitalTwin3D({ sensorValues, connectionMode, crop, le
     <div
       className="relative w-full overflow-hidden rounded-2xl"
       style={{
-        height: 560,
-        background: "linear-gradient(160deg,#3b6ea5 0%,#60a5fa 55%,#3b6ea5 100%)",
+        height: 600,
+        boxShadow: "0 18px 44px rgba(15,23,42,0.16)",
+        background: "linear-gradient(160deg,#93c5fd 0%,#bfdbfe 42%,#86efac 100%)",
       }}
     >
       <HeaderBar
@@ -1006,15 +1122,15 @@ export function GreenhouseDigitalTwin3D({ sensorValues, connectionMode, crop, le
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [7, 5.5, 8.5], fov: 45 }}
+        camera={{ position: [8.6, 6.2, 9.6], fov: 42 }}
         style={{ background: "transparent" }}
       >
         <Suspense fallback={<Html center><span style={{ color: "#22c55e" }}>加载 3D 场景中…</span></Html>}>
           <Scene crop={crop} ledOn={ledOn} motorOn={motorOn} waterOn={waterOn} alert={hasAlert} />
           <OrbitControls
             enablePan={false}
-            minDistance={4}
-            maxDistance={14}
+            minDistance={5}
+            maxDistance={16}
             maxPolarAngle={Math.PI / 2.05}
             target={[0, 1.4, 0]}
           />

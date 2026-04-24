@@ -97,4 +97,64 @@ async function consumeSseStream(res: Response, callbacks: StreamCallbacks) {
     const text = await res.text();
     throw new Error(text || `agri-agent stream request failed: ${res.status}`);
   }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    const text = await res.text();
+    if (text.trim()) callbacks.onToken(text);
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const handleEvent = (evt: StreamEvent) => {
+    const data = evt.data;
+    if (!data || data === "[DONE]") {
+      callbacks.onDone?.(data);
+      return;
+    }
+    if (evt.event === "error") {
+      callbacks.onError?.(data);
+      return;
+    }
+    if (evt.event === "thinking") {
+      callbacks.onThinking?.(data);
+      return;
+    }
+    if (evt.event === "context" || evt.event === "conversation" || evt.event === "conversationId") {
+      callbacks.onContext?.(data);
+      return;
+    }
+
+    try {
+      const json = JSON.parse(data);
+      const conversationId = json.conversationId || json.conversation_id || json.contextId;
+      if (conversationId) callbacks.onContext?.(String(conversationId));
+      const token = json.token ?? json.content ?? json.answer ?? json.text ?? json.delta ?? json.message;
+      if (token != null) callbacks.onToken(String(token));
+      return;
+    } catch {
+      callbacks.onToken(data);
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      const evt = parseSseBlock(block);
+      if (evt) handleEvent(evt);
+    }
+    if (done) break;
+  }
+
+  const tail = buffer.trim();
+  if (tail) {
+    const evt = parseSseBlock(tail);
+    if (evt) handleEvent(evt);
+    else callbacks.onToken(tail);
+  }
 }

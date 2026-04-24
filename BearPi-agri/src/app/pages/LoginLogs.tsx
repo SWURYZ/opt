@@ -43,7 +43,7 @@ export function LoginLogs() {
         <div>
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-green-600" />
-            登录日志
+            登录记录
           </h1>
           <p className="text-sm text-gray-500 mt-1">记录所有用户的登录行为及时间</p>
         </div>

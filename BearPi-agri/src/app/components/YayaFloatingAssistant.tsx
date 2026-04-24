@@ -21,6 +21,8 @@ const FAB_SIZE = 112;
 const FAB_MARGIN = 20;
 const PANEL_MIN_MARGIN = 12;
 const PANEL_GAP = 16;
+const YAYA_FAB_Z_INDEX = 2147483646;
+const YAYA_PANEL_Z_INDEX = 2147483647;
 
 interface ISpeechRecognitionAlternative {
   transcript: string;
@@ -254,7 +256,7 @@ const GREETINGS: Record<string, string> = {
   "晚上好": "晚上好，记得关注夜间温湿度变化。",
   "谢谢": "不客气，有事随时叫我。",
   "你是谁": "我是芽芽，擅长温室环境分析和控制指令执行。",
-  "能干什么": "我可以帮你跳转页面、控制设备、创建规则、做农事决策建议。",
+  "能干什么": "我可以帮你跳转页面、控制设备、创建方案、做农事决策建议。",
 };
 
 type DeviceCommand = {
@@ -269,25 +271,25 @@ type NavCommand = {
 };
 
 const NAV_COMMANDS: Array<NavCommand & { aliases: string[] }> = [
-  { to: "/", label: "总览大屏", aliases: ["总览大屏", "总览", "首页", "主页面", "主界面", "大屏"] },
-  { to: "/monitor", label: "实时监测", aliases: ["实时监测", "实时监控", "实时数据", "监测页面"] },
-  { to: "/alerts", label: "阈值告警", aliases: ["阈值告警", "告警页面", "报警页面", "预警页面"] },
-  { to: "/control", label: "设备控制", aliases: ["设备控制", "控制页面", "控制中心", "手动控制"] },
-  { to: "/automation", label: "联动规则", aliases: ["联动规则", "自动化", "规则页面", "联动页面"] },
-  { to: "/history", label: "历史分析", aliases: ["历史分析", "历史数据", "趋势分析", "历史页面"] },
-  { to: "/devices", label: "设备管理", aliases: ["设备管理", "设备页面", "设备列表"] },
-  { to: "/ai", label: "农事问答", aliases: ["农事问答", "问答助手", "AI问答", "智能问答"] },
+  { to: "/", label: "农场总览", aliases: ["农场总览", "总览", "首页", "主页面", "主界面", "大屏"] },
+  { to: "/monitor", label: "大棚实况", aliases: ["大棚实况", "实时监控", "实时数据", "监测页面"] },
+  { to: "/alerts", label: "环境提醒", aliases: ["环境提醒", "提醒页面", "提醒页面", "提醒页面"] },
+  { to: "/control", label: "设备开关", aliases: ["设备开关", "开关页面", "设备开关", "手动开关"] },
+  { to: "/automation", label: "农事方案", aliases: ["农事方案", "自动处理", "方案页面", "方案页面"] },
+  { to: "/history", label: "往期记录", aliases: ["往期记录", "往期数据", "变化趋势", "往期记录"] },
+  { to: "/devices", label: "设备登记", aliases: ["设备登记", "设备登记", "设备列表"] },
+  { to: "/ai", label: "芽芽问答", aliases: ["芽芽问答", "问答助手", "芽芽问答", "芽芽问答"] },
   { to: "/insect", label: "害虫识别", aliases: ["害虫识别", "虫害识别", "虫子识别", "拍虫", "识别虫害"] },
   { to: "/users", label: "用户管理", aliases: ["用户管理", "用户页面", "账号管理"] },
-  { to: "/logs", label: "登录日志", aliases: ["登录日志", "日志页面", "用户日志"] },
+  { to: "/logs", label: "登录记录", aliases: ["登录记录", "记录页面", "用户记录"] },
 ];
 
 const PHONETIC_FIXES: Array<[RegExp, string]> = [
-  [/总览大平|总览大瓶|总览大坪/g, "总览大屏"],
-  [/实时减测|实时监策|实时监侧/g, "实时监测"],
-  [/法值告警|罚值告警|发值告警/g, "阈值告警"],
-  [/连动规则|联动归则|联动鬼则/g, "联动规则"],
-  [/设备空置|设备孔制|设备孔子/g, "设备控制"],
+  [/总览大平|总览大瓶|总览大坪/g, "农场总览"],
+  [/实时减测|实时监策|实时监侧/g, "大棚实况"],
+  [/法值告警|罚值告警|发值告警/g, "环境提醒"],
+  [/连动规则|联动归则|联动鬼则/g, "农事方案"],
+  [/设备空置|设备孔制|设备孔子/g, "设备开关"],
   [/补光登|补光等|不光灯/g, "补光灯"],
   [/风机电击|风机电级|风机电集/g, "风机电机"],
   [/二氧化探|二氧化탄|二氧化太/g, "二氧化碳"],
@@ -512,7 +514,7 @@ function parseDeviceCommand(text: string): DeviceCommand | null {
 
 function parseAutomationRuleIntent(text: string) {
   const t = normalize(text);
-  if (!/(新建|创建|添加).*(联动规则)|联动规则/.test(t)) {
+  if (!/(新建|创建|添加).*(农事方案)|农事方案/.test(t)) {
     return null;
   }
 
@@ -564,7 +566,7 @@ function parseAutomationRuleIntent(text: string) {
 
 function parseThresholdIntent(text: string) {
   const t = normalize(text);
-  if (!/(新建|创建|设置|添加).*(阈值|告警)|阈值告警/.test(t)) {
+  if (!/(新建|创建|设置|添加).*(安全值|告警)|环境提醒/.test(t)) {
     return null;
   }
 
@@ -642,8 +644,8 @@ const INTENT_SCHEMA_PROMPT = `你是芽芽智能农业助手的"指令路由器"
    to 必须是：/ /monitor /alerts /control /automation /history /devices /ai /users /logs /insect
 2. device_control —— 立即开关设备：{ "action":"device_control", "commandType":"LIGHT_CONTROL|MOTOR_CONTROL", "commandAction":"ON|OFF", "greenhouseNo":"1-6可选", "label":"补光灯|风机", "reply":"播报" }
 3. light_schedule —— 创建补光灯定时规则：{ "action":"light_schedule", "turnOnTime":"HH:mm", "turnOffTime":"HH:mm", "reply":"播报" }（24 小时制）
-4. threshold_alert —— 创建阈值告警：{ "action":"threshold_alert", "greenhouseNo":"1-6", "metric":"temp|humidity|light|co2", "min":数, "max":数, "reply":"播报" }
-5. automation_rule —— 创建联动规则：{ "action":"automation_rule", "greenhouseNo":"1-6", "metric":"Temperature|Humidity|Luminance|co2", "operator":"GT|LT|GTE|LTE", "threshold":数, "commandType":"LIGHT_CONTROL|MOTOR_CONTROL", "commandAction":"ON|OFF", "reply":"播报" }
+4. threshold_alert —— 创建环境提醒：{ "action":"threshold_alert", "greenhouseNo":"1-6", "metric":"temp|humidity|light|co2", "min":数, "max":数, "reply":"播报" }
+5. automation_rule —— 创建农事方案：{ "action":"automation_rule", "greenhouseNo":"1-6", "metric":"Temperature|Humidity|Luminance|co2", "operator":"GT|LT|GTE|LTE", "threshold":数, "commandType":"LIGHT_CONTROL|MOTOR_CONTROL", "commandAction":"ON|OFF", "reply":"播报" }
 6. answer —— 用户在问问题/聊天而非下达指令：{ "action":"answer", "reply":"" }（reply 留空，让后续 Q&A 处理）
 7. unknown —— 完全无法理解：{ "action":"unknown" }
 reply 字段简短中文，≤30 字，是芽芽要语音回复用户的话。
@@ -1191,10 +1193,10 @@ export function YayaFloatingAssistant() {
       return;
     }
 
-    // 「聚焦/查看 N 号大棚」→ 切到实时监测页并打开对应大棚详情
+    // 「聚焦/查看 N 号大棚」→ 切到大棚实况页并打开对应大棚详情
     const ghFocus = parseGreenhouseFocusCommand(text);
     if (ghFocus) {
-      // 先确保切到实时监测页
+      // 先确保切到大棚实况页
       navigate("/monitor");
       // 等待页面挂载后再分发事件
       setTimeout(() => {
@@ -1311,12 +1313,12 @@ export function YayaFloatingAssistant() {
           conditions: automation.conditions,
         });
         navigate("/automation");
-        const reply = `联动规则已创建：${automation.summary}`;
+        const reply = `农事方案已创建：${automation.summary}`;
         push("assistant", reply);
         speakText(reply);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "未知错误";
-        const reply = `联动规则创建失败：${msg}`;
+        const reply = `农事方案创建失败：${msg}`;
         push("assistant", reply);
         speakText(reply);
       }
@@ -1342,12 +1344,12 @@ export function YayaFloatingAssistant() {
         });
         await runThresholdCheckNow();
         navigate("/alerts");
-        const reply = `${threshold.gh}号大棚阈值告警已创建，区间 ${threshold.min} 到 ${threshold.max}。`;
+        const reply = `${threshold.gh}号大棚环境提醒已创建，区间 ${threshold.min} 到 ${threshold.max}。`;
         push("assistant", reply);
         speakText(reply);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "未知错误";
-        const reply = `阈值规则创建失败：${msg}`;
+        const reply = `安全范围创建失败：${msg}`;
         push("assistant", reply);
         speakText(reply);
       }
@@ -1423,7 +1425,7 @@ export function YayaFloatingAssistant() {
           });
           await runThresholdCheckNow();
           navigate("/alerts");
-          const reply = intent.reply || `${intent.greenhouseNo}号大棚阈值告警已创建。`;
+          const reply = intent.reply || `${intent.greenhouseNo}号大棚环境提醒已创建。`;
           push("assistant", reply);
           speakText(reply);
           return;
@@ -1447,7 +1449,7 @@ export function YayaFloatingAssistant() {
             ],
           });
           navigate("/automation");
-          const reply = intent.reply || "联动规则已创建。";
+          const reply = intent.reply || "农事方案已创建。";
           push("assistant", reply);
           speakText(reply);
           return;
@@ -1473,7 +1475,7 @@ export function YayaFloatingAssistant() {
             },
             onDone: () => { },
             onError: (msg) => {
-              throw new Error(msg || "智能问答失败");
+              throw new Error(msg || "芽芽问答失败");
             },
           },
         );
@@ -1706,7 +1708,7 @@ export function YayaFloatingAssistant() {
   }, []);
 
   const NAV_ROUTES = ["/", "/monitor", "/alerts", "/control", "/automation", "/history", "/devices", "/ai"];
-  const NAV_LABELS = ["总览大屏", "实时监测", "阈值告警", "设备控制", "联动规则", "历史分析", "设备管理", "农事问答"];
+  const NAV_LABELS = ["农场总览", "大棚实况", "环境提醒", "设备开关", "农事方案", "往期记录", "设备登记", "芽芽问答"];
   const NUM_KEYS: GestureLabel[] = ["one", "two", "three", "four", "five", "six", "seven", "eight"];
   const NUM_ICONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣"];
 
@@ -1929,8 +1931,9 @@ export function YayaFloatingAssistant() {
       {/* ── Floating Yaya button with particle halo + ripple rings ── */}
       <div
         ref={fabRef}
-        className="fixed z-[75]"
+        className="fixed"
         style={{
+          zIndex: YAYA_FAB_Z_INDEX,
           width: FAB_SIZE,
           height: FAB_SIZE,
           left: fabPos.x,
@@ -2239,8 +2242,9 @@ export function YayaFloatingAssistant() {
       {open && (
         <div
           ref={panelRef}
-          className="fixed z-[85] w-[360px] max-w-[94vw] overflow-hidden rounded-[26px]"
+          className="fixed w-[360px] max-w-[94vw] overflow-hidden rounded-[26px]"
           style={{
+            zIndex: YAYA_PANEL_Z_INDEX,
             left: panelLeft,
             top: panelTop,
             maxHeight: `calc(100vh - ${PANEL_MIN_MARGIN * 2}px)`,

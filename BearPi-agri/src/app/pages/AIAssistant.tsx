@@ -386,7 +386,7 @@ export function AIAssistant() {
     return [
       `${greeting}我是**农事智能助手** 🌱`,
       "",
-      `我已读取 **${data.gh}** 的实时监测数据作为上下文，可以为您提供基于当前大棚环境的个性化种植建议。`,
+      `我已读取 **${data.gh}** 的大棚实况数据作为上下文，可以为您提供基于当前大棚环境的个性化种植建议。`,
       "",
       "您可以问我：作物管理、病虫害防治、设备操作、环境调控等农业相关问题。",
     ].join("\n");
@@ -469,7 +469,7 @@ export function AIAssistant() {
     );
   }
 
-  /** 解析语音指令中的设备控制命令 */
+  /** 解析语音指令中的设备开关命令 */
   function parseDeviceCommand(text: string): { commandType: string; action: string; label: string } | null {
     const t = text.replace(/\s+/g, "");
     // 补光灯
@@ -481,7 +481,7 @@ export function AIAssistant() {
     return null;
   }
 
-  /** 执行设备控制命令（语音触发） */
+  /** 执行设备开关命令（语音触发） */
   async function executeVoiceDeviceCommand(cmd: { commandType: string; action: string; label: string }) {
     const now = Date.now();
     const userMsg: Message = {
@@ -518,10 +518,10 @@ export function AIAssistant() {
   }
 
   async function sendMessage(text?: string) {
-    const content = text || input.trim();
+    const content = text || input.trim() || (selectedImage ? "请分析这张图片，识别其中的作物、病虫害、异常现象，并给出农事建议。" : "");
     if (!content || loading) return;
 
-    // 语音设备控制指令检测
+    // 语音设备开关指令检测
     const deviceCmd = parseDeviceCommand(content);
     if (deviceCmd) {
       setInput("");
@@ -684,8 +684,26 @@ export function AIAssistant() {
   function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 10 * 1024 * 1024) return;
+    if (!file.type.startsWith("image/")) {
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "请选择图片文件。",
+        thinking: "",
+        timestamp: formatTime(new Date()),
+      }]);
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "图片不能超过 10MB，请压缩后再上传。",
+        thinking: "",
+        timestamp: formatTime(new Date()),
+      }]);
+      return;
+    }
     const preview = URL.createObjectURL(file);
     setSelectedImage({ file, preview });
     if (fileInputRef.current) fileInputRef.current.value = "";

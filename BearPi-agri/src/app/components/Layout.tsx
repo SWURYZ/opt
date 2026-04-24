@@ -9,7 +9,6 @@ import {
   BarChart2,
   Cpu,
   Bot,
-  Leaf,
   ChevronRight,
   Users,
   LogOut,
@@ -22,18 +21,18 @@ import { getCurrentUser, logout, type User } from "../services/auth";
 import { YayaFloatingAssistant } from "./YayaFloatingAssistant";
 
 const baseNavItems = [
-  { to: "/", icon: LayoutDashboard, label: "总览大屏", desc: "多大棚统一监控" },
-  { to: "/monitor", icon: Activity, label: "实时监测", desc: "全指标实时环境" },
-  { to: "/alerts", icon: BellRing, label: "阈值告警", desc: "温湿度预警审计" },
-  { to: "/control", icon: Sliders, label: "设备控制", desc: "手动/定时控制" },
-  { to: "/automation", icon: Zap, label: "联动规则", desc: "复合条件自动化" },
-  { to: "/history", icon: BarChart2, label: "历史分析", desc: "数据趋势图表" },
-  { to: "/devices", icon: Cpu, label: "设备管理", desc: "绑定/解绑设备" },
-  { to: "/ai", icon: Bot, label: "农事问答", desc: "AI智能助手" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "农场总览", desc: "多大棚统一监控" },
+  { to: "/monitor", icon: Activity, label: "大棚实况", desc: "全指标实时环境" },
+  { to: "/alerts", icon: BellRing, label: "环境提醒", desc: "温湿度预警审计" },
+  { to: "/control", icon: Sliders, label: "设备开关", desc: "手动/定时控制" },
+  { to: "/automation", icon: Zap, label: "农事方案", desc: "按环境自动处理" },
+  { to: "/history", icon: BarChart2, label: "往期记录", desc: "数据趋势图表" },
+  { to: "/devices", icon: Cpu, label: "设备登记", desc: "绑定/解绑设备" },
+  { to: "/ai", icon: Bot, label: "芽芽问答", desc: "芽芽小助手" },
 ];
 
 const adminNavItem = { to: "/users", icon: Users, label: "用户管理", desc: "用户与人脸管理" };
-const logsNavItem = { to: "/logs", icon: ClipboardList, label: "登录日志", desc: "用户登录记录" };
+const logsNavItem = { to: "/logs", icon: ClipboardList, label: "登录记录", desc: "用户登录记录" };
 // 病虫害识别主要为手机移动端扫码/拍照场景,放在侧边栏最末尾
 const insectNavItem = { to: "/insect", icon: Bug, label: "病虫害识别", desc: "害虫+病害 拍照识别" };
 
@@ -75,9 +74,7 @@ export function Layout() {
   };
 
   const currentNav =
-    navItems.find((it) =>
-      it.to === "/" ? location.pathname === "/" : location.pathname.startsWith(it.to),
-    ) || baseNavItems[0];
+    navItems.find((it) => location.pathname === it.to || location.pathname.startsWith(`${it.to}/`)) || baseNavItems[1];
   const CurrentIcon = currentNav.icon;
 
   // 侧边栏内容（PC 与抽屉共用）
@@ -85,14 +82,19 @@ export function Layout() {
     <>
       <div className="flex items-center justify-between gap-3 px-5 py-5 border-b border-green-700">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 bg-green-400 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
-            <Leaf className="w-5 h-5 text-green-900" />
+          <div className="relative w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg shadow-green-950/30 flex-shrink-0 overflow-hidden"
+            style={{ background: "linear-gradient(135deg, #ecfdf5 0%, #86efac 42%, #16a34a 100%)" }}>
+            <span className="absolute inset-[7px] rounded-[55%_45%_55%_45%] rotate-45 bg-white/95 shadow-inner shadow-green-900/10" />
+            <span className="absolute h-4.5 w-4.5 rounded-full bg-gradient-to-br from-emerald-500 to-green-800 shadow-sm" />
+            <span className="absolute h-2 w-2 rounded-full bg-lime-200" />
+            <span className="absolute bottom-1.5 left-1/2 h-3.5 w-7 -translate-x-1/2 rounded-t-full bg-lime-300/95" />
+            <span className="absolute bottom-2 left-1/2 h-2.5 w-0.5 -translate-x-1/2 bg-green-700 rounded-full" />
           </div>
           <div className="min-w-0">
             <div className="text-white text-sm font-semibold leading-tight truncate">
-              智慧农业大棚
+              农眸
             </div>
-            <div className="text-green-300 text-xs">管理系统 v2.0</div>
+            <div className="text-green-300 text-xs">大棚生态智能管家系统</div>
           </div>
         </div>
         <button
@@ -107,10 +109,7 @@ export function Layout() {
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
-          const isActive =
-            item.to === "/"
-              ? location.pathname === "/"
-              : location.pathname.startsWith(item.to);
+          const isActive = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
           return (
             <NavLink
               key={item.to}

@@ -85,8 +85,9 @@ const BACKEND_TO_OPERATOR: Record<string, string> = {
 };
 
 const DEVICE_ACTION_OPTIONS = [
-  { label: "补光灯", commandType: "LIGHT_CONTROL" as const },
-  { label: "灌溉水泵", commandType: "MOTOR_CONTROL" as const },
+  { label: "补光灯", commandType: "LIGHT_CONTROL" as const, actionKey: "light" },
+  { label: "风机", commandType: "MOTOR_CONTROL" as const, actionKey: "fan" },
+  { label: "灌溉水泵", commandType: "MOTOR_CONTROL" as const, actionKey: "pump" },
 ];
 
 function sensorByMetric(metric: string) {
@@ -159,7 +160,9 @@ export function AutomationRules() {
           });
 
           const actionDevice =
-            DEVICE_ACTION_OPTIONS.find((x) => x.commandType === rule.commandType)?.label || rule.commandType;
+            rule.commandType === "MOTOR_CONTROL" && /灌溉|水泵|浇水/.test(rule.name + " " + (rule.description ?? ""))
+              ? "灌溉水泵"
+              : DEVICE_ACTION_OPTIONS.find((x) => x.commandType === rule.commandType)?.label || rule.commandType;
           const actionOperation = (rule.commandAction === "OFF" ? "关闭" : "开启") as "开启" | "关闭";
 
           let triggerCount = 0;
@@ -271,7 +274,7 @@ export function AutomationRules() {
 
     const payload = {
       name: newRule.name,
-      description: `${newRule.gh} 自动联动规则`,
+      description: `${newRule.gh} 自动农事方案`,
       logicOperator: newRule.logic,
       enabled: true,
       targetDeviceId,
@@ -350,7 +353,7 @@ export function AutomationRules() {
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-5">
       <div>
-        <h1 className="text-xl font-bold text-gray-800">复合条件联动控制</h1>
+        <h1 className="text-xl font-bold text-gray-800">农事自动方案</h1>
       </div>
 
       {notice && (
@@ -366,7 +369,7 @@ export function AutomationRules() {
       )}
 
       <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 flex items-center gap-2 flex-wrap">
-        {["农户组合条件", "后端实时数据流匹配", "全部条件命中", "自动下发设备指令", "操作记录入库"].map((step, i) => (
+        {["农户设定条件", "实时环境判断", "条件满足", "自动控制设备", "保存操作记录"].map((step, i) => (
           <div key={step} className="flex items-center gap-2">
             <span className="text-xs bg-white border border-purple-200 text-purple-700 px-2.5 py-1 rounded-lg font-medium shadow-sm">{step}</span>
             {i < 4 && <ChevronRight className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />}
@@ -374,7 +377,7 @@ export function AutomationRules() {
         ))}
       </div>
 
-      <p className="text-xs text-gray-500">规则引擎默认每 10 秒扫描一次，命中后通常在一个扫描周期内出现在执行记录中。</p>
+      <p className="text-xs text-gray-500">自动管家默认每 10 秒扫描一次，命中后通常在一个扫描周期内出现在执行记录中。</p>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
         <button
@@ -383,7 +386,7 @@ export function AutomationRules() {
             activeTab === "rules" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          联动规则
+          农事方案
         </button>
         <button
           onClick={() => {
@@ -407,13 +410,13 @@ export function AutomationRules() {
               className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors shadow-sm"
             >
               <Plus className="w-4 h-4" />
-              新建联动规则
+              新建农事方案
             </button>
           </div>
 
           {showAdd && (
             <div className="bg-white rounded-xl border-2 border-green-300 p-5 shadow-sm space-y-4">
-              <h4 className="text-sm font-semibold text-gray-800">{editingRuleId == null ? "新建联动规则" : "编辑联动规则"}</h4>
+              <h4 className="text-sm font-semibold text-gray-800">{editingRuleId == null ? "新建农事方案" : "编辑农事方案"}</h4>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">规则名称</label>
@@ -519,7 +522,7 @@ export function AutomationRules() {
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none"
                   >
                     {DEVICE_ACTION_OPTIONS.map((d) => (
-                      <option key={d.commandType}>{d.label}</option>
+                      <option key={d.actionKey}>{d.label}</option>
                     ))}
                   </select>
                   <select
@@ -545,7 +548,7 @@ export function AutomationRules() {
                   取消
                 </button>
                 <button onClick={() => void saveRule()} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
-                  {editingRuleId == null ? "保存规则" : "保存修改"}
+                  {editingRuleId == null ? "保存方案" : "保存修改"}
                 </button>
               </div>
             </div>
@@ -553,7 +556,7 @@ export function AutomationRules() {
 
           <div className="space-y-3">
             {loading && <div className="text-sm text-gray-500">加载中...</div>}
-            {!loading && rules.length === 0 && <div className="text-sm text-gray-500">暂无规则</div>}
+            {!loading && rules.length === 0 && <div className="text-sm text-gray-500">暂无方案</div>}
 
             {rules.map((rule) => (
               <div key={rule.id} className={`bg-white rounded-xl border-2 p-5 shadow-sm transition-all ${rule.status === "启用" ? "border-gray-100" : "border-dashed border-gray-200 opacity-60"}`}>
@@ -639,7 +642,7 @@ export function AutomationRules() {
 
       {activeTab === "logs" && (
         <div className="space-y-3">
-          <p className="text-sm text-gray-500">所有联动规则的触发与执行记录，自动存入数据库</p>
+          <p className="text-sm text-gray-500">所有农事方案的触发与执行记录，自动存入数据库</p>
           {logs.length === 0 && <div className="text-sm text-gray-500">暂无执行记录</div>}
           {logs.map((log, i) => (
             <div key={`${log.id}-${i}`} className={`bg-white rounded-xl border p-4 shadow-sm flex items-start gap-4 ${log.result === "已触发" ? "border-green-100" : "border-gray-100"}`}>
