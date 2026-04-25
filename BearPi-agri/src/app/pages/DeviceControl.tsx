@@ -32,6 +32,9 @@ import { getCropLightProfile } from "../lib/cropLightProfiles";
 
 type DeviceStatus = "on" | "off" | "loading" | "error";
 type SwitchKey = "light" | "fan" | "water";
+type PendingTargetState = Partial<Record<SwitchKey, boolean>>;
+
+const PRIMARY_GREENHOUSE_NAME = "1号大棚";
 
 type GhControlState = {
   light: DeviceStatus;
@@ -84,6 +87,7 @@ export function DeviceControl() {
   const [boundByGreenhouse, setBoundByGreenhouse] = useState<Record<string, DeviceMappingResponse>>({});
   const [controlStates, setControlStates] = useState<Record<string, GhControlState>>({});
   const lightManualOverrideRef = useRef<Record<string, boolean>>({});
+  const pendingTargetRef = useRef<Record<string, PendingTargetState>>({});
   const [timers, setTimers] = useState<ScheduleRuleResponse[]>([]);
   const [timerGreenhouse, setTimerGreenhouse] = useState("");
   const [showAddTimer, setShowAddTimer] = useState(false);
@@ -129,15 +133,47 @@ export function DeviceControl() {
   }, []);
 
   const syncDeviceState = useCallback(async (ghName: string, deviceId: string) => {
+    const mergeConfirmedState = (realState: GhControlState) => {
+      setControlStates((prev) => {
+        const old = prev[ghName] ?? defaultGhState();
+        const next = { ...realState };
+
+        if (ghName === PRIMARY_GREENHOUSE_NAME) {
+          const pending = pendingTargetRef.current[ghName];
+          if (pending?.light !== undefined) {
+            const real = realState.light === "on";
+            if (real === pending.light) {
+              delete pending.light;
+            } else {
+              next.light = pending.light ? "on" : "off";
+            }
+          }
+          const motorPending = pending?.fan ?? pending?.water;
+          if (motorPending !== undefined) {
+            const real = realState.fan === "on";
+            if (real === motorPending) {
+              delete pending?.fan;
+              delete pending?.water;
+            } else {
+              next.fan = motorPending ? "on" : "off";
+              next.water = motorPending ? "on" : "off";
+            }
+          }
+        }
+
+        return {
+          ...prev,
+          [ghName]: { ...next, feedback: old.feedback },
+        };
+      });
+    };
+
     try {
       const status = await fetchRealtimeDeviceStatus(deviceId);
       if (status) {
         const nextState = applyRealtimeToState(status);
         if (isNight && !lightManualOverrideRef.current[ghName]) nextState.light = "on";
-        setControlStates((prev) => ({
-          ...prev,
-          [ghName]: { ...nextState, feedback: prev[ghName]?.feedback },
-        }));
+        mergeConfirmedState(nextState);
         return;
       }
     } catch {
@@ -149,10 +185,7 @@ export function DeviceControl() {
       if (status) {
         const nextState = applyFallbackToState(status);
         if (isNight && !lightManualOverrideRef.current[ghName]) nextState.light = "on";
-        setControlStates((prev) => ({
-          ...prev,
-          [ghName]: { ...nextState, feedback: prev[ghName]?.feedback },
-        }));
+        mergeConfirmedState(nextState);
       }
     } catch {
       // ignore errors to keep UI responsive
@@ -258,6 +291,18 @@ export function DeviceControl() {
       lightManualOverrideRef.current[ghName] = true;
     }
     const targetAction = current === "on" ? "OFF" : "ON";
+    const targetOn = targetAction === "ON";
+
+    if (ghName === PRIMARY_GREENHOUSE_NAME) {
+      const pending = pendingTargetRef.current[ghName] ?? {};
+      if (key === "light") {
+        pending.light = targetOn;
+      } else {
+        pending.fan = targetOn;
+        pending.water = targetOn;
+      }
+      pendingTargetRef.current[ghName] = pending;
+    }
 
     setControlStates((prev) => {
       const now = prev[ghName] || defaultGhState();
@@ -310,6 +355,15 @@ export function DeviceControl() {
         void syncDeviceState(ghName, binding.deviceId);
       }, 1200);
     } catch {
+      if (ghName === PRIMARY_GREENHOUSE_NAME) {
+        const pending = pendingTargetRef.current[ghName];
+        if (key === "light") {
+          delete pending?.light;
+        } else {
+          delete pending?.fan;
+          delete pending?.water;
+        }
+      }
       setControlStates((prev) => ({
         ...prev,
         [ghName]: {

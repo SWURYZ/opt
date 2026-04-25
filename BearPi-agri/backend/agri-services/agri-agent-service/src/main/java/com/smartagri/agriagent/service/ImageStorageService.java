@@ -2,6 +2,7 @@ package com.smartagri.agriagent.service;
 
 import com.smartagri.agriagent.config.AgriAgentUploadProperties;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -18,6 +19,7 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ImageStorageService {
@@ -92,7 +94,19 @@ public class ImageStorageService {
     private String publicUrl(String date, String filename) {
         String base = stripTrailingSlash(properties.getPublicBaseUrl());
         String path = properties.getPublicPath().startsWith("/") ? properties.getPublicPath() : "/" + properties.getPublicPath();
-        return base + stripTrailingSlash(path) + "/" + date + "/" + filename;
+        String url = base + stripTrailingSlash(path) + "/" + date + "/" + filename;
+        if (!StringUtils.hasText(base) || isLocalOnlyUrl(url)) {
+            log.warn("agri-agent image public URL may be inaccessible to remote vision tools: {}", url);
+        }
+        return url;
+    }
+
+    private boolean isLocalOnlyUrl(String url) {
+        String lower = url == null ? "" : url.toLowerCase(Locale.ROOT);
+        return lower.startsWith("/")
+                || lower.contains("localhost")
+                || lower.contains("127.0.0.1")
+                || lower.contains("0.0.0.0");
     }
 
     private String detectContentType(MultipartFile file) {

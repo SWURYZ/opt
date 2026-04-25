@@ -21,6 +21,7 @@ export interface GestureEvent {
 }
 
 type GestureCallback = (event: GestureEvent) => void;
+type GestureMode = "wake" | "active";
 
 // ── MediaPipe config ────────────────────────────────────────────────────────
 // WASM 文件由 public/mediapipe/ 本地提供，避免 CDN 网络依赖
@@ -58,6 +59,7 @@ let rafId: number | null = null;
 let videoEl: HTMLVideoElement | null = null;
 let cameraStream: MediaStream | null = null;
 let currentCallback: GestureCallback | null = null;
+let currentMode: GestureMode = "wake";
 let pauseCount = 0;
 
 let latestModelGesture: GestureLabel = "none";
@@ -251,6 +253,32 @@ async function classifyFromModel(lm: NormalizedLandmark[]): Promise<GestureLabel
   return asGestureLabel(gestureLabels[bestIdx] ?? "none");
 }
 
+function detectWakeGesture(lm: NormalizedLandmark[]): GestureLabel {
+  const thumbExtended = lm[4].y < lm[3].y && lm[3].y < lm[2].y;
+  const fingersFolded =
+    lm[8].y > lm[6].y &&
+    lm[12].y > lm[10].y &&
+    lm[16].y > lm[14].y &&
+    lm[20].y > lm[18].y;
+
+  return thumbExtended && fingersFolded ? "thumbs_up" : "none";
+}
+
+function resetGestureState(): void {
+  pendingGesture     = "none";
+  pendingStartTime   = 0;
+  lastEmittedGesture = "none";
+  lastEmittedTime    = 0;
+  lastAnyTime        = 0;
+  latestModelGesture = "none";
+  inferenceInFlight  = false;
+  inferenceSeq       += 1;
+}
+
+function canEmitGesture(gesture: GestureLabel): boolean {
+  return currentMode === "active" || gesture === "thumbs_up";
+}
+
 // ── Detection loop ───────────────────────────────────────────────────────────
 function processFrame(): void {
   if (!handLandmarker || !videoEl || videoEl.readyState < 2) {
@@ -264,14 +292,11 @@ function processFrame(): void {
   let detected: GestureLabel = "none";
   if (result.landmarks.length > 0) {
     const lm = result.landmarks[0];
-    detected = latestModelGesture;
+    detected = currentMode === "wake" ? detectWakeGesture(lm) : latestModelGesture;
 
-    // 全局广播原始 landmark（每帧），供 3D 视角拖拽等连续控制使用
-    if (typeof window !== "undefined") {
+    if (currentMode === "active" && typeof window !== "undefined") {
       const wrist = lm[0];
       const p9 = lm[9], p4 = lm[4], p8 = lm[8];
-      // 4 指（食指/中指/无名指/小指）的指尖与对应 MCP（掌指关节）距腕距离
-      // 用于消费端做握拳几何判定（指尖距腕 < MCP 距腕 → 弯曲）
       const dist = (a: typeof wrist, b: typeof wrist) =>
         Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
       const tipsToWrist = [
@@ -282,32 +307,28 @@ function processFrame(): void {
         dist(lm[5],  wrist), dist(lm[9],  wrist),
         dist(lm[13], wrist), dist(lm[17], wrist),
       ];
-      // 手掌基准长度：腕(0) → 中指根(9) 的距离，用于标准化位移
       const palmRefLength = dist(wrist, p9);
-      // 手掌宽度：食指根(5) → 小指根(17)；用于标准化捏合距离（与离镜头远近无关）
       const palmWidth = dist(lm[5], lm[17]);
-      // 原始捏合像素距离
       const pinchPx = Math.hypot(p4.x - p8.x, p4.y - p8.y, p4.z - p8.z);
-      // 标准化捏合比例：捏紧 ≈ 0~0.1；自然 ≈ 0.5；张开 > 1.2
       const pinchRatio = pinchPx / Math.max(palmWidth, 1e-4);
 
       window.dispatchEvent(new CustomEvent("yaya:hand", {
         detail: {
           timestamp: now,
-          anchor: { x: p9.x, y: p9.y, z: p9.z },          // 中指根部 → 旋转锚点
-          thumbTip: { x: p4.x, y: p4.y, z: p4.z },        // 大拇指尖
-          indexTip: { x: p8.x, y: p8.y, z: p8.z },        // 食指尖
-          pinchDistance: pinchPx,                         // 原始像素距离（保留兼容）
-          pinchRatio,                                     // ★ 标准化捏合比例（推荐使用）
-          palmWidth,                                      // 手掌宽度（5→17）
-          tipsToWrist,                                    // [食指,中指,无名指,小指] 指尖距腕
-          mcpsToWrist,                                    // [食指,中指,无名指,小指] MCP 距腕
-          palmRefLength,                                  // 手掌基准长度（用于标准化位移）
+          anchor: { x: p9.x, y: p9.y, z: p9.z },
+          thumbTip: { x: p4.x, y: p4.y, z: p4.z },
+          indexTip: { x: p8.x, y: p8.y, z: p8.z },
+          pinchDistance: pinchPx,
+          pinchRatio,
+          palmWidth,
+          tipsToWrist,
+          mcpsToWrist,
+          palmRefLength,
         },
       }));
     }
 
-    if (!inferenceInFlight) {
+    if (currentMode === "active" && !inferenceInFlight) {
       inferenceInFlight = true;
       const seq = ++inferenceSeq;
       void classifyFromModel(lm)
@@ -349,7 +370,7 @@ function processFrame(): void {
         ? timeSinceAny > ANY_COOLDOWN_MS
         : timeSinceLast > SAME_GESTURE_COOLDOWN_MS;
 
-      if (cooldownOk) {
+      if (cooldownOk && canEmitGesture(detected)) {
         lastEmittedGesture = detected;
         lastEmittedTime    = now;
         lastAnyTime        = now;
@@ -381,8 +402,11 @@ function processFrame(): void {
  */
 export async function startGestureRecognition(
   callback: GestureCallback,
+  mode: GestureMode = "wake",
 ): Promise<() => void> {
-  // 已在运行时只更新 callback，不重启摄像头
+  currentMode = mode;
+
+  // 已在运行时只更新 callback / mode，不重启摄像头
   if (rafId !== null && videoEl !== null) {
     currentCallback = callback;
     return stopGestureRecognition;
@@ -397,11 +421,7 @@ export async function startGestureRecognition(
   videoEl = await createGestureVideo(stream);
 
   // Reset debounce state
-  pendingGesture     = "none";
-  pendingStartTime   = 0;
-  lastEmittedGesture = "none";
-  lastEmittedTime    = 0;
-  lastAnyTime        = 0;
+  resetGestureState();
 
   rafId = requestAnimationFrame(processFrame);
 
@@ -434,6 +454,12 @@ export function describeGestureError(err: unknown): string {
   return `手势识别启动失败：${msg}`;
 }
 
+export function setGestureRecognitionMode(mode: GestureMode): void {
+  if (currentMode === mode) return;
+  currentMode = mode;
+  resetGestureState();
+}
+
 /** Stop gesture recognition and release all resources. */
 export function stopGestureRecognition(): void {
   if (rafId !== null) {
@@ -450,15 +476,9 @@ export function stopGestureRecognition(): void {
     videoEl = null;
   }
   currentCallback    = null;
+  currentMode        = "wake";
   pauseCount         = 0;
-  pendingGesture     = "none";
-  pendingStartTime   = 0;
-  lastEmittedGesture = "none";
-  lastEmittedTime    = 0;
-  lastAnyTime        = 0;
-  latestModelGesture = "none";
-  inferenceInFlight  = false;
-  inferenceSeq       = 0;
+  resetGestureState();
 }
 
 export function pauseGestureRecognition(): void {
@@ -477,10 +497,7 @@ export function pauseGestureRecognition(): void {
     videoEl.remove();
     videoEl = null;
   }
-  pendingGesture     = "none";
-  pendingStartTime   = 0;
-  latestModelGesture = "none";
-  inferenceInFlight  = false;
+  resetGestureState();
 }
 
 export async function resumeGestureRecognition(): Promise<void> {

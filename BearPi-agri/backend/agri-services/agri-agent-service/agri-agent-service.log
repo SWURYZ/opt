@@ -8,35 +8,19 @@
 
  :: Spring Boot ::                (v3.3.6)
 
-2026-04-24T23:03:07.943+08:00  INFO 786715 --- [agri-agent-service] [           main] c.s.agriagent.AgriAgentApplication       : Starting AgriAgentApplication using Java 21.0.10 with PID 786715 (/opt/BearPi-agri/backend/agri-services/agri-agent-service/target/agri-agent-service-0.1.0-SNAPSHOT.jar started by ubuntu in /opt/BearPi-agri)
-2026-04-24T23:03:07.946+08:00  INFO 786715 --- [agri-agent-service] [           main] c.s.agriagent.AgriAgentApplication       : No active profile set, falling back to 1 default profile: "default"
-2026-04-24T23:03:09.924+08:00  INFO 786715 --- [agri-agent-service] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8085 (http)
-2026-04-24T23:03:09.945+08:00  INFO 786715 --- [agri-agent-service] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-04-24T23:03:09.946+08:00  INFO 786715 --- [agri-agent-service] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.33]
-2026-04-24T23:03:09.991+08:00  INFO 786715 --- [agri-agent-service] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-04-24T23:03:09.993+08:00  INFO 786715 --- [agri-agent-service] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1967 ms
-2026-04-24T23:03:11.093+08:00  INFO 786715 --- [agri-agent-service] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8085 (http) with context path '/'
-2026-04-24T23:03:11.114+08:00  INFO 786715 --- [agri-agent-service] [           main] c.s.agriagent.AgriAgentApplication       : Started AgriAgentApplication in 3.802 seconds (process running for 4.54)
-2026-04-24T23:04:42.503+08:00  INFO 786715 --- [agri-agent-service] [nio-8085-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-24T23:04:42.503+08:00  INFO 786715 --- [agri-agent-service] [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-04-24T23:04:42.504+08:00  INFO 786715 --- [agri-agent-service] [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
-2026-04-24T23:05:45.581+08:00  WARN 786715 --- [agri-agent-service] [nio-8085-exec-3] .w.s.m.s.DefaultHandlerExceptionResolver : Resolved [org.springframework.web.context.request.async.AsyncRequestNotUsableException: ServletOutputStream failed to flush: java.io.IOException: Broken pipe]
-2026-04-24T23:15:18.345+08:00  INFO 786715 --- [agri-agent-service] [nio-8085-exec-8] o.apache.coyote.http11.Http11Processor   : Error parsing HTTP request header
- Note: further occurrences of HTTP request parsing errors will be logged at DEBUG level.
-
-java.lang.IllegalArgumentException: Invalid character found in method name [0x160x030x010x000xec0x010x000x000xe80x030x0310x010xcbZj0xb70xb70x98F ]. HTTP method names must be tokens
-	at org.apache.coyote.http11.Http11InputBuffer.parseRequestLine(Http11InputBuffer.java:406) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:270) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:905) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1741) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1190) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63) ~[tomcat-embed-core-10.1.33.jar!/:na]
-	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
-
-2026-04-25T09:33:55.546+08:00  INFO 786715 --- [agri-agent-service] [nio-8085-exec-9] o.apache.coyote.http11.Http11Processor   : Error parsing HTTP request header
+2026-04-25T10:42:56.976+08:00  INFO 998319 --- [agri-agent-service] [           main] c.s.agriagent.AgriAgentApplication       : Starting AgriAgentApplication using Java 21.0.10 with PID 998319 (/opt/BearPi-agri/backend/agri-services/agri-agent-service/target/agri-agent-service-0.1.0-SNAPSHOT.jar started by ubuntu in /opt/BearPi-agri)
+2026-04-25T10:42:56.981+08:00  INFO 998319 --- [agri-agent-service] [           main] c.s.agriagent.AgriAgentApplication       : No active profile set, falling back to 1 default profile: "default"
+2026-04-25T10:42:58.707+08:00  INFO 998319 --- [agri-agent-service] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8085 (http)
+2026-04-25T10:42:58.723+08:00  INFO 998319 --- [agri-agent-service] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-04-25T10:42:58.723+08:00  INFO 998319 --- [agri-agent-service] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.33]
+2026-04-25T10:42:58.765+08:00  INFO 998319 --- [agri-agent-service] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-04-25T10:42:58.766+08:00  INFO 998319 --- [agri-agent-service] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1714 ms
+2026-04-25T10:42:59.791+08:00  INFO 998319 --- [agri-agent-service] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8085 (http) with context path '/'
+2026-04-25T10:42:59.816+08:00  INFO 998319 --- [agri-agent-service] [           main] c.s.agriagent.AgriAgentApplication       : Started AgriAgentApplication in 3.459 seconds (process running for 4.173)
+2026-04-25T10:43:12.079+08:00  INFO 998319 --- [agri-agent-service] [nio-8085-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-04-25T10:43:12.079+08:00  INFO 998319 --- [agri-agent-service] [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-04-25T10:43:12.081+08:00  INFO 998319 --- [agri-agent-service] [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-04-25T10:47:52.466+08:00  INFO 998319 --- [agri-agent-service] [io-8085-exec-10] o.apache.coyote.http11.Http11Processor   : Error parsing HTTP request header
  Note: further occurrences of HTTP request parsing errors will be logged at DEBUG level.
 
 java.lang.IllegalArgumentException: Invalid character found in method name [0x050x010x00...]. HTTP method names must be tokens
@@ -51,3 +35,99 @@ java.lang.IllegalArgumentException: Invalid character found in method name [0x05
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63) ~[tomcat-embed-core-10.1.33.jar!/:na]
 	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
 
+2026-04-25T11:16:33.722+08:00  WARN 998319 --- [agri-agent-service] [nio-8085-exec-5] .w.s.m.s.DefaultHandlerExceptionResolver : Resolved [org.springframework.web.context.request.async.AsyncRequestNotUsableException: ServletOutputStream failed to flush: java.io.IOException: Broken pipe]
+2026-04-25T11:24:20.737+08:00  WARN 998319 --- [agri-agent-service] [nio-8085-exec-3] .w.s.m.s.DefaultHandlerExceptionResolver : Resolved [org.springframework.web.context.request.async.AsyncRequestNotUsableException: ServletOutputStream failed to flush: java.io.IOException: Broken pipe]
+2026-04-25T11:24:20.742+08:00 ERROR 998319 --- [agri-agent-service] [or-http-epoll-1] reactor.core.publisher.Operators         : Operator called default onErrorDropped
+
+java.lang.IllegalStateException: A non-container (application) thread attempted to use the AsyncContext after an error had occurred and the call to AsyncListener.onError() had returned. This is not allowed to avoid race conditions.
+	at org.apache.catalina.core.AsyncContextImpl.check(AsyncContextImpl.java:537) ~[tomcat-embed-core-10.1.33.jar!/:na]
+	at org.apache.catalina.core.AsyncContextImpl.getRequest(AsyncContextImpl.java:211) ~[tomcat-embed-core-10.1.33.jar!/:na]
+	at org.apache.catalina.core.AsyncContextImpl.dispatch(AsyncContextImpl.java:201) ~[tomcat-embed-core-10.1.33.jar!/:na]
+	at org.apache.catalina.core.AsyncContextImpl.dispatch(AsyncContextImpl.java:176) ~[tomcat-embed-core-10.1.33.jar!/:na]
+	at org.apache.catalina.core.AsyncContextImpl.dispatch(AsyncContextImpl.java:170) ~[tomcat-embed-core-10.1.33.jar!/:na]
+	at org.springframework.web.context.request.async.StandardServletAsyncWebRequest.dispatch(StandardServletAsyncWebRequest.java:170) ~[spring-web-6.1.15.jar!/:6.1.15]
+	at org.springframework.web.context.request.async.WebAsyncManager.setConcurrentResultAndDispatch(WebAsyncManager.java:411) ~[spring-web-6.1.15.jar!/:6.1.15]
+	at org.springframework.web.context.request.async.WebAsyncManager.lambda$startDeferredResultProcessing$8(WebAsyncManager.java:489) ~[spring-web-6.1.15.jar!/:6.1.15]
+	at org.springframework.web.context.request.async.DeferredResult.setResultInternal(DeferredResult.java:272) ~[spring-web-6.1.15.jar!/:6.1.15]
+	at org.springframework.web.context.request.async.DeferredResult.setErrorResult(DeferredResult.java:287) ~[spring-web-6.1.15.jar!/:6.1.15]
+	at org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitterReturnValueHandler$HttpMessageConvertingHandler.completeWithError(ResponseBodyEmitterReturnValueHandler.java:241) ~[spring-webmvc-6.1.15.jar!/:6.1.15]
+	at org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.completeWithError(ResponseBodyEmitter.java:267) ~[spring-webmvc-6.1.15.jar!/:6.1.15]
+	at com.smartagri.agriagent.controller.AgriAgentController.lambda$toEmitter$0(AgriAgentController.java:94) ~[!/:na]
+	at reactor.core.publisher.LambdaSubscriber.onNext(LambdaSubscriber.java:160) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxOnErrorResume$ResumeSubscriber.onNext(FluxOnErrorResume.java:79) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxConcatMapNoPrefetch$FluxConcatMapNoPrefetchSubscriber.innerNext(FluxConcatMapNoPrefetch.java:259) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxConcatMap$ConcatMapInner.onNext(FluxConcatMap.java:865) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxIterable$IterableSubscription.fastPath(FluxIterable.java:402) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxIterable$IterableSubscription.request(FluxIterable.java:291) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.Operators$MultiSubscriptionSubscriber.set(Operators.java:2367) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.Operators$MultiSubscriptionSubscriber.onSubscribe(Operators.java:2241) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxIterable.subscribe(FluxIterable.java:201) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxIterable.subscribe(FluxIterable.java:83) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.Flux.subscribe(Flux.java:8848) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxConcatMapNoPrefetch$FluxConcatMapNoPrefetchSubscriber.onNext(FluxConcatMapNoPrefetch.java:207) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.SerializedSubscriber.onNext(SerializedSubscriber.java:99) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxTimeout$TimeoutMainSubscriber.onNext(FluxTimeout.java:181) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.MonoFlatMapMany$FlatMapManyInner.onNext(MonoFlatMapMany.java:251) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxOnErrorResume$ResumeSubscriber.onNext(FluxOnErrorResume.java:79) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxOnAssembly$OnAssemblySubscriber.onNext(FluxOnAssembly.java:539) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxConcatMapNoPrefetch$FluxConcatMapNoPrefetchSubscriber.innerNext(FluxConcatMapNoPrefetch.java:259) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxConcatMap$ConcatMapInner.onNext(FluxConcatMap.java:865) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxConcatMap$WeakScalarSubscription.request(FluxConcatMap.java:480) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.Operators$MultiSubscriptionSubscriber.set(Operators.java:2367) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxConcatMapNoPrefetch$FluxConcatMapNoPrefetchSubscriber.onNext(FluxConcatMapNoPrefetch.java:202) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxBufferPredicate$BufferPredicateSubscriber.onNextNewBuffer(FluxBufferPredicate.java:317) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxBufferPredicate$BufferPredicateSubscriber.tryOnNext(FluxBufferPredicate.java:227) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxBufferPredicate$BufferPredicateSubscriber.onNext(FluxBufferPredicate.java:200) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxPeekFuseable$PeekFuseableConditionalSubscriber.onNext(FluxPeekFuseable.java:503) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxMapFuseable$MapFuseableConditionalSubscriber.onNext(FluxMapFuseable.java:299) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxContextWrite$ContextWriteSubscriber.onNext(FluxContextWrite.java:107) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxDoFinally$DoFinallySubscriber.onNext(FluxDoFinally.java:113) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxConcatArray$ConcatArraySubscriber.onNext(FluxConcatArray.java:180) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxFlattenIterable$FlattenIterableSubscriber.drainAsync(FluxFlattenIterable.java:453) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxFlattenIterable$FlattenIterableSubscriber.drain(FluxFlattenIterable.java:724) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxFlattenIterable$FlattenIterableSubscriber.onNext(FluxFlattenIterable.java:256) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxMap$MapSubscriber.onNext(FluxMap.java:122) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxPeek$PeekSubscriber.onNext(FluxPeek.java:200) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.core.publisher.FluxMap$MapSubscriber.onNext(FluxMap.java:122) ~[reactor-core-3.6.12.jar!/:3.6.12]
+	at reactor.netty.channel.FluxReceive.drainReceiver(FluxReceive.java:292) ~[reactor-netty-core-1.1.24.jar!/:1.1.24]
+	at reactor.netty.channel.FluxReceive.onInboundNext(FluxReceive.java:401) ~[reactor-netty-core-1.1.24.jar!/:1.1.24]
+	at reactor.netty.channel.ChannelOperations.onInboundNext(ChannelOperations.java:435) ~[reactor-netty-core-1.1.24.jar!/:1.1.24]
+	at reactor.netty.http.client.HttpClientOperations.onInboundNext(HttpClientOperations.java:830) ~[reactor-netty-http-1.1.24.jar!/:1.1.24]
+	at reactor.netty.channel.ChannelOperationsHandler.channelRead(ChannelOperationsHandler.java:115) ~[reactor-netty-core-1.1.24.jar!/:1.1.24]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:444) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.codec.MessageToMessageDecoder.channelRead(MessageToMessageDecoder.java:107) ~[netty-codec-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:444) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.CombinedChannelDuplexHandler$DelegatingChannelHandlerContext.fireChannelRead(CombinedChannelDuplexHandler.java:436) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.codec.ByteToMessageDecoder.fireChannelRead(ByteToMessageDecoder.java:346) ~[netty-codec-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:318) ~[netty-codec-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.CombinedChannelDuplexHandler.channelRead(CombinedChannelDuplexHandler.java:251) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:442) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.ssl.SslHandler.unwrap(SslHandler.java:1503) ~[netty-handler-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.ssl.SslHandler.decodeJdkCompatible(SslHandler.java:1366) ~[netty-handler-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.ssl.SslHandler.decode(SslHandler.java:1415) ~[netty-handler-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.codec.ByteToMessageDecoder.decodeRemovalReentryProtection(ByteToMessageDecoder.java:530) ~[netty-codec-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.codec.ByteToMessageDecoder.callDecode(ByteToMessageDecoder.java:469) ~[netty-codec-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:290) ~[netty-codec-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:444) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.DefaultChannelPipeline$HeadContext.channelRead(DefaultChannelPipeline.java:1357) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:440) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.DefaultChannelPipeline.fireChannelRead(DefaultChannelPipeline.java:868) ~[netty-transport-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.epoll.AbstractEpollStreamChannel$EpollStreamUnsafe.epollInReady(AbstractEpollStreamChannel.java:799) ~[netty-transport-classes-epoll-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.epoll.EpollEventLoop.processReady(EpollEventLoop.java:501) ~[netty-transport-classes-epoll-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.channel.epoll.EpollEventLoop.run(EpollEventLoop.java:399) ~[netty-transport-classes-epoll-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:997) ~[netty-common-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[netty-common-4.1.115.Final.jar!/:4.1.115.Final]
+	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[netty-common-4.1.115.Final.jar!/:4.1.115.Final]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-04-25T11:45:20.829+08:00  WARN 998319 --- [agri-agent-service] [nio-8085-exec-4] .w.s.m.s.DefaultHandlerExceptionResolver : Resolved [org.springframework.web.context.request.async.AsyncRequestNotUsableException: ServletOutputStream failed to flush: java.io.IOException: Broken pipe]
+2026-04-25T14:56:58.600+08:00  WARN 998319 --- [agri-agent-service] [nio-8085-exec-8] .w.s.m.s.DefaultHandlerExceptionResolver : Resolved [org.springframework.web.context.request.async.AsyncRequestNotUsableException: ServletOutputStream failed to flush: java.io.IOException: Broken pipe]

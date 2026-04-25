@@ -179,13 +179,14 @@ export function Login() {
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
-            streamRef.current?.getTracks().forEach((t) => t.stop());
-            streamRef.current = null;
             const snapshot = document.createElement("canvas");
             snapshot.width = canvas.width;
             snapshot.height = canvas.height;
             const snapshotCtx = snapshot.getContext("2d");
             snapshotCtx?.drawImage(canvas, 0, 0);
+            setScanStatus("登录成功，正在识别当前心情...");
+            streamRef.current?.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
             setWelcomeCanvas(snapshot);
             setWelcomeUser(user.displayName || user.username);
           } catch (loginErr) {

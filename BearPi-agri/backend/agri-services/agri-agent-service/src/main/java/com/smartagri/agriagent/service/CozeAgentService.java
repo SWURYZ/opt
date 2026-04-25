@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartagri.agriagent.config.CozeApiProperties;
 import com.smartagri.agriagent.dto.AgriAgentChatRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CozeAgentService {
@@ -42,8 +44,8 @@ public class CozeAgentService {
         return streamChatInternal(request.withoutFile());
     }
 
-    public Flux<AgentChunk> streamChatWithImage(AgriAgentChatRequest request, String fileId) {
-        return streamChatInternal(new AgriAgentChatRequest(request.question(), request.userId(), request.conversationId(), fileId, null));
+    public Flux<AgentChunk> streamChatWithImage(AgriAgentChatRequest request, String fileId, String imageUrl) {
+        return streamChatInternal(new AgriAgentChatRequest(request.question(), request.userId(), request.conversationId(), fileId, imageUrl));
     }
 
     public Flux<AgentChunk> streamChatWithImageUrl(AgriAgentChatRequest request, String imageUrl) {
@@ -70,7 +72,10 @@ public class CozeAgentService {
                 .bodyToFlux(SSE_STRING_TYPE)
                 .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
                 .concatMap(this::parseSseEvent)
-                .onErrorResume(ex -> Flux.just(AgentChunk.error(ex.getMessage())));
+                .onErrorResume(ex -> {
+                    log.error("Coze agri-agent stream request failed", ex);
+                    return Flux.just(AgentChunk.error(ex.getMessage()));
+                });
     }
 
     public Mono<String> chat(AgriAgentChatRequest request) {
@@ -93,23 +98,25 @@ public class CozeAgentService {
             payload.put("conversation_id", request.conversationId());
         }
 
-        if (StringUtils.hasText(request.imageUrl())) {
-            try {
-                payload.put("additional_messages", List.of(
-                        Map.of(
-                                "role", "user",
-                                "content", objectMapper.writeValueAsString(Map.of(
-                                        "text", request.question(),
-                                        "url", request.imageUrl())),
-                                "content_type", "text")));
-            } catch (IOException err) {
-                throw new IllegalStateException("failed to build image question payload", err);
-            }
-        } else if (StringUtils.hasText(request.fileId())) {
+        if (StringUtils.hasText(request.fileId())) {
             List<Map<String, String>> parts = List.of(
                     Map.of("type", "text", "text", request.question()),
                     Map.of("type", "image", "file_id", request.fileId()));
             try {
+                payload.put("additional_messages", List.of(
+                        Map.of(
+                                "role", "user",
+                                "content", objectMapper.writeValueAsString(parts),
+                                "content_type", "object_string")));
+            } catch (IOException err) {
+                throw new IllegalStateException("failed to build image question payload", err);
+            }
+        } else if (StringUtils.hasText(request.imageUrl())) {
+            try {
+                List<Map<String, String>> parts = List.of(
+                        Map.of("type", "text", "text", request.question()),
+                        Map.of("type", "image", "file_url", request.imageUrl()));
+
                 payload.put("additional_messages", List.of(
                         Map.of(
                                 "role", "user",
@@ -318,6 +325,7 @@ public class CozeAgentService {
         // --- Legacy / fallback msg_type format ---
         String msgType = textNode(node, "/msg_type");
         if (StringUtils.hasText(msgType)) {
+            String lowerMsgType = msgType.toLowerCase();
             if ("generate_answer_finish".equalsIgnoreCase(msgType)) {
                 addChunk(chunks, AgentChunk.done());
                 return chunks;
@@ -328,6 +336,15 @@ public class CozeAgentService {
                 if (StringUtils.hasText(answer)) {
                     addChunk(chunks, AgentChunk.token(fixPossibleMojibake(answer)));
                 }
+            }
+            // Internal meta events (knowledge_recall, tool_call, function_call, verbose, etc.)
+            // must NOT fall through to the recursive data-node parsing below,
+            // otherwise deeply-nested ori_req / bot_context / content leaks as TOKEN chunks.
+            if (lowerMsgType.contains("knowledge") || lowerMsgType.contains("tool")
+                    || lowerMsgType.contains("function") || lowerMsgType.contains("verbose")
+                    || lowerMsgType.contains("debug") || lowerMsgType.contains("trace")
+                    || lowerMsgType.contains("status") || lowerMsgType.contains("progress")) {
+                return chunks;
             }
         }
 
@@ -418,6 +435,10 @@ public class CozeAgentService {
 
         try {
             JsonNode contentNode = objectMapper.readTree(contentTrimmed);
+            if (looksLikeEmptyImageToolResult(node, contentNode)) {
+                log.warn("Coze image understanding tool returned empty response_for_model: {}", node.toString());
+                return "图片理解工具未返回有效识别结果，请检查图片公网 URL 是否可访问，以及 tupianlijie-imgUnderstand 工具入参是否正确。";
+            }
             return firstNonBlank(
                     textNode(contentNode, "/response_for_model"),
                     deepText(contentNode, "response_for_model"),
@@ -425,6 +446,19 @@ public class CozeAgentService {
         } catch (Exception ignored) {
             return content;
         }
+    }
+
+    private boolean looksLikeEmptyImageToolResult(JsonNode node, JsonNode contentNode) {
+        String toolName = firstNonBlank(
+                textNode(node, "/name"),
+                textNode(node, "/tool_name"),
+                textNode(node, "/function/name"),
+                deepText(node, "name", "tool_name"));
+        boolean isImageTool = StringUtils.hasText(toolName)
+                && (toolName.contains("tupianlijie") || toolName.contains("imgUnderstand") || toolName.contains("图片理解"));
+        boolean hasEmptyResponse = contentNode.has("response_for_model")
+                && !StringUtils.hasText(contentNode.path("response_for_model").asText(null));
+        return isImageTool && hasEmptyResponse;
     }
 
     private String parseConversationId(String rawData) {

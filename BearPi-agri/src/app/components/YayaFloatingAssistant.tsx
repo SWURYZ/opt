@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { Send, Square, X } from "lucide-react";
-import { startGestureRecognition, stopGestureRecognition, describeGestureError, type GestureLabel, type GestureEvent } from "../services/gestureRecognition";
+import { startGestureRecognition, stopGestureRecognition, setGestureRecognitionMode, describeGestureError, type GestureLabel, type GestureEvent } from "../services/gestureRecognition";
 import { sendManualControl, createScheduleRule, fetchScheduleRules, deleteScheduleRule } from "../services/deviceControl";
 import { createCompositeRule } from "../services/compositeCondition";
 import { createThresholdRule, runThresholdCheckNow } from "../services/thresholdAlert";
@@ -1683,6 +1683,7 @@ export function YayaFloatingAssistant() {
       // 否则用户在芽芽自动播报病虫害时，必须先做 👍 才能再做 👎 关闭
       yayaGestureActiveRef.current = true;
       setYayaGestureActive(true);
+      setGestureRecognitionMode("active");
       speakText(detail.text);
     };
     const onStop = () => {
@@ -1738,6 +1739,7 @@ export function YayaFloatingAssistant() {
       case "thumbs_up":
         yayaGestureActiveRef.current = true;
         setYayaGestureActive(true);
+        setGestureRecognitionMode("active");
         setOpen(true);
         triggerGestureAnim("summoning", 1100);
         setGestureFeedback({ icon: "👍", text: "芽芽来啦！说话就行", color: "#4ade80" });
@@ -1753,6 +1755,7 @@ export function YayaFloatingAssistant() {
       case "thumbs_down":
         yayaGestureActiveRef.current = false;
         setYayaGestureActive(false);
+        setGestureRecognitionMode("wake");
         setOpen(false);
         triggerGestureAnim("dismissing", 900);
         setGestureFeedback({ icon: "👋", text: "芽芽休息啦，随时唤醒我~", color: "#f87171" });
@@ -1822,7 +1825,7 @@ export function YayaFloatingAssistant() {
   // ── Gesture recognition lifecycle（启动一次，永不重启）─────────────────────
   useEffect(() => {
     let cancelled = false;
-    startGestureRecognition(stableGestureCallback)
+    startGestureRecognition(stableGestureCallback, yayaGestureActiveRef.current ? "active" : "wake")
       .then((cleanup) => {
         if (cancelled) { cleanup(); return; }
         gestureCleanupRef.current = cleanup;
@@ -1901,6 +1904,9 @@ export function YayaFloatingAssistant() {
       if (!target) return;
       if (panelRef.current?.contains(target)) return;
       if (fabRef.current?.contains(target)) return;
+      yayaGestureActiveRef.current = false;
+      setYayaGestureActive(false);
+      setGestureRecognitionMode("wake");
       setOpen(false);
     };
 
@@ -2054,7 +2060,11 @@ export function YayaFloatingAssistant() {
               suppressClickRef.current = false;
               return;
             }
-            setOpen((v) => !v);
+            const nextOpen = !open;
+            setOpen(nextOpen);
+            yayaGestureActiveRef.current = nextOpen;
+            setYayaGestureActive(nextOpen);
+            setGestureRecognitionMode(nextOpen ? "active" : "wake");
           }}
           onPointerDown={onFabPointerDown}
           onPointerMove={onFabPointerMove}
@@ -2302,7 +2312,12 @@ export function YayaFloatingAssistant() {
               </div>
             </div>
             <button
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                yayaGestureActiveRef.current = false;
+                setYayaGestureActive(false);
+                setGestureRecognitionMode("wake");
+                setOpen(false);
+              }}
               className="flex h-7 w-7 items-center justify-center rounded-full transition-colors"
               style={{ background: "rgba(0,0,0,0.06)" }}
             >

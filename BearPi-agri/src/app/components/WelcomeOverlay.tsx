@@ -61,10 +61,12 @@ export function WelcomeOverlay({ displayName, faceCanvas, onDone }: Props) {
   }, [exprResult, detectDone, displayName]);
 
   useEffect(() => {
-    const exitTimer = setTimeout(() => setExiting(true), 3200);
-    const doneTimer = setTimeout(() => onDoneRef.current(), 3750);
+    if (!detectDone) return;
+
+    const exitTimer = setTimeout(() => setExiting(true), 2000);
+    const doneTimer = setTimeout(() => onDoneRef.current(), 2550);
     return () => { clearTimeout(exitTimer); clearTimeout(doneTimer); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [detectDone]);
 
   const expression = exprResult?.expression ?? "neutral";
   const cfg = EXPRESSION_CONFIG[expression];

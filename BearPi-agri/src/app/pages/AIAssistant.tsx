@@ -29,11 +29,14 @@ import { sendManualControl } from "../services/deviceControl";
 import { speak, stopSpeaking, isTTSSupported } from "../lib/speech";
 import { getCurrentUser } from "../services/auth";
 
+type MessageStatus = "thinking" | "replying" | "finished";
+
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  thinking: string;
+  reasoningContent: string;
+  status: MessageStatus;
   timestamp: string;
   sources?: string[];
   imagePreview?: string;
@@ -260,26 +263,24 @@ function renderInline(text: string): (string | React.JSX.Element)[] {
   return parts;
 }
 
-/* --- Thinking Block (ChatGPT style) --- */
-function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming: boolean }) {
+/* --- Reasoning Block (DeepSeek/O1 style) --- */
+function ReasoningBlock({ content, status }: { content: string; status: MessageStatus }) {
   const [collapsed, setCollapsed] = useState(false);
-  const thinkingEndRef = useRef<HTMLDivElement>(null);
+  const reasoningEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll thinking area during streaming
   useEffect(() => {
-    if (isStreaming && thinkingEndRef.current) {
-      thinkingEndRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if ((status === "thinking" || status === "replying") && reasoningEndRef.current) {
+      reasoningEndRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }, [content, isStreaming]);
+  }, [content, status]);
 
-  // Auto-collapse when streaming ends and there is content
   useEffect(() => {
-    if (!isStreaming && content) {
+    if (status === "finished" && content) {
       setCollapsed(true);
     }
-  }, [isStreaming, content]);
+  }, [status, content]);
 
-  if (!content && !isStreaming) return null;
+  if (!content && status !== "thinking") return null;
 
   const showBody = !collapsed;
 
@@ -289,9 +290,9 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming:
         onClick={() => setCollapsed(!collapsed)}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-purple-700 hover:bg-purple-100/40 transition-colors"
       >
-        <Brain className={"w-4 h-4 " + (isStreaming ? "animate-pulse text-purple-500" : "text-purple-400")} />
-        <span className="font-semibold">{isStreaming ? "\u6b63\u5728\u601d\u8003..." : "\u601d\u8003\u5b8c\u6210"}</span>
-        {isStreaming && (
+        <Brain className={"w-4 h-4 " + (status !== "finished" ? "animate-pulse text-purple-500" : "text-purple-400")} />
+        <span className="font-semibold">{status !== "finished" ? "芽芽正在思考..." : "推理过程"}</span>
+        {status !== "finished" && (
           <div className="flex gap-0.5 ml-1">
             {[0, 1, 2].map((i) => (
               <div key={i} className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: i * 0.2 + "s" }} />
@@ -305,9 +306,9 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming:
       {showBody && (
         <div className="px-3 pb-3 border-t border-purple-100 max-h-72 overflow-y-auto">
           <div className="text-xs text-purple-600/80 leading-relaxed whitespace-pre-wrap pt-2">
-            {content || "\u601d\u8003\u4e2d..."}
-            {isStreaming && <span className="inline-block w-1 h-3 bg-purple-400 ml-0.5 animate-pulse" />}
-            <div ref={thinkingEndRef} />
+            {content || "正在理解问题、检索知识库并组织回答..."}
+            {status !== "finished" && <span className="inline-block w-1 h-3 bg-purple-400 ml-0.5 animate-pulse" />}
+            <div ref={reasoningEndRef} />
           </div>
         </div>
       )}
@@ -397,7 +398,8 @@ export function AIAssistant() {
       id: "0",
       role: "assistant",
       content: buildWelcome(null, defaultData),
-      thinking: "",
+      reasoningContent: "",
+      status: "thinking",
       timestamp: formatTime(new Date()),
       sources: [],
     },
@@ -450,7 +452,25 @@ export function AIAssistant() {
       setTimeout(() => sendMessageRef.current(text), 100);
     }, []));
 
-  function appendField(assistantId: string, field: "content" | "thinking", text: string) {
+  /** Filter out leaked internal metadata from appearing in the reasoning chain UI */
+  function isSafeReasoningContent(text: string): boolean {
+    if (!text || text.trim().length === 0) return false;
+    const t = text.trim();
+    // Block raw JSON blobs containing Coze internal fields
+    if (t.startsWith("{") && (t.includes("ori_req") || t.includes("bot_context")
+        || t.includes("scene_context") || t.includes("connector_id")
+        || t.includes("coze_api_key") || t.includes("bot_persona")
+        || t.includes("bot_default_param") || t.includes("agent_schema"))) {
+      return false;
+    }
+    // Block extremely long raw text that looks like leaked context (>300 chars of non-readable content)
+    if (t.length > 300 && !/[\u4e00-\u9fff]/.test(t.slice(0, 50))) {
+      return false;
+    }
+    return true;
+  }
+
+  function appendField(assistantId: string, field: "content" | "reasoningContent", text: string) {
     if (!text) return;
     setMessages((prev) =>
       prev.map((msg) =>
@@ -461,10 +481,18 @@ export function AIAssistant() {
     );
   }
 
-  function updateField(assistantId: string, field: "content" | "thinking", text: string) {
+  function updateField(assistantId: string, field: "content" | "reasoningContent", text: string) {
     setMessages((prev) =>
       prev.map((msg) =>
         msg.id === assistantId ? { ...msg, [field]: text } : msg,
+      ),
+    );
+  }
+
+  function updateStatus(assistantId: string, status: MessageStatus) {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === assistantId ? { ...msg, status } : msg,
       ),
     );
   }
@@ -488,7 +516,8 @@ export function AIAssistant() {
       id: now.toString(),
       role: "user",
       content: `语音指令：${cmd.label}`,
-      thinking: "",
+      reasoningContent: "",
+      status: "finished",
       timestamp: formatTime(new Date()),
     };
     const assistantId = (now + 1).toString();
@@ -496,7 +525,8 @@ export function AIAssistant() {
       id: assistantId,
       role: "assistant",
       content: "",
-      thinking: "",
+      reasoningContent: "",
+      status: "finished",
       timestamp: formatTime(new Date()),
     };
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -536,7 +566,8 @@ export function AIAssistant() {
       id: now.toString(),
       role: "user",
       content,
-      thinking: "",
+      reasoningContent: "",
+      status: "finished",
       timestamp: formatTime(new Date()),
       imagePreview: selectedImage?.preview,
     };
@@ -546,7 +577,8 @@ export function AIAssistant() {
       id: assistantId,
       role: "assistant",
       content: "",
-      thinking: "",
+      reasoningContent: "",
+      status: "finished",
       timestamp: formatTime(new Date()),
       sources: [],
     };
@@ -586,10 +618,22 @@ export function AIAssistant() {
       const streamCallbacks = {
         onToken: (token: string) => {
           const cleaned = token.replace(/^###\s*$/gm, "").replace(/^###\s*\n/gm, "");
-          if (cleaned) appendField(assistantId, "content", cleaned);
+          if (cleaned) {
+            appendField(assistantId, "content", cleaned);
+            updateStatus(assistantId, "replying");
+          }
         },
         onThinking: (token: string) => {
-          appendField(assistantId, "thinking", token);
+          if (!isSafeReasoningContent(token)) return;
+          appendField(assistantId, "reasoningContent", token.endsWith("\n") ? token : `${token}\n`);
+          updateStatus(assistantId, "thinking");
+        },
+        onStatus: (message: string) => {
+          if (!isSafeReasoningContent(message)) return;
+          if (message) {
+            appendField(assistantId, "reasoningContent", `${message}\n`);
+            updateStatus(assistantId, "thinking");
+          }
         },
         onContext: (id: string) => {
           const trimmed = id?.trim();
@@ -597,7 +641,11 @@ export function AIAssistant() {
             setConversationId(trimmed);
           }
         },
+        onDone: () => {
+          updateStatus(assistantId, "finished");
+        },
         onError: (message: string) => {
+          updateStatus(assistantId, "finished");
           updateField(assistantId, "content", "\u670d\u52a1\u5f02\u5e38\uff1a" + (message || "\u8bf7\u7a0d\u540e\u91cd\u8bd5"));
         },
       };
@@ -648,6 +696,7 @@ export function AIAssistant() {
         updateField(assistantId, "content", "\u8bf7\u6c42\u5931\u8d25\uff1a" + errText);
       }
     } finally {
+      updateStatus(assistantId, "finished");
       abortRef.current = null;
       setLoading(false);
       setActiveAssistantId(null);
@@ -689,7 +738,8 @@ export function AIAssistant() {
         id: Date.now().toString(),
         role: "assistant",
         content: "请选择图片文件。",
-        thinking: "",
+        reasoningContent: "",
+      status: "finished",
         timestamp: formatTime(new Date()),
       }]);
       return;
@@ -699,7 +749,8 @@ export function AIAssistant() {
         id: Date.now().toString(),
         role: "assistant",
         content: "图片不能超过 10MB，请压缩后再上传。",
-        thinking: "",
+        reasoningContent: "",
+      status: "finished",
         timestamp: formatTime(new Date()),
       }]);
       return;
@@ -854,9 +905,9 @@ export function AIAssistant() {
               >
                 {msg.role === "assistant" ? (
                   <div className="space-y-1">
-                    <ThinkingBlock
-                      content={msg.thinking}
-                      isStreaming={loading && msg.id === activeAssistantId && !msg.content}
+                    <ReasoningBlock
+                      content={msg.reasoningContent}
+                      status={msg.status}
                     />
                     {renderMarkdown(msg.content)}
                   </div>
@@ -919,7 +970,7 @@ export function AIAssistant() {
         {/* Loading Indicator */}
         {loading && activeAssistantId && (() => {
           const activeMsg = messages.find((m) => m.id === activeAssistantId);
-          const hasContent = activeMsg && (activeMsg.content || activeMsg.thinking);
+          const hasContent = activeMsg && (activeMsg.content || activeMsg.reasoningContent);
           if (hasContent) return null;
           return (
             <div className="flex gap-3">
