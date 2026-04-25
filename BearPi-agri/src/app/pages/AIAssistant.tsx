@@ -452,6 +452,25 @@ export function AIAssistant() {
       setTimeout(() => sendMessageRef.current(text), 100);
     }, []));
 
+  /**
+   * Strip duplicated pre-answer reasoning preview text that Coze model emits
+   * before the proper markdown answer. Detects the pattern where a greeting
+   * (e.g. "你好ryz！") appears multiple times — the last occurrence marks
+   * the real formatted answer.
+   */
+  function stripReasoningPreview(content: string): string {
+    if (!content) return content;
+    // Find all occurrences of greeting pattern like "你好ryz！" / "你好ryz！\n"
+    const greetingRe = /你好\s*\w*[!！]\s*\n?/g;
+    const matches = content.match(greetingRe);
+    if (matches && matches.length > 1) {
+      // Keep only the text after the last greeting
+      const lastIdx = content.lastIndexOf(matches[matches.length - 1]);
+      return content.slice(lastIdx).trimStart();
+    }
+    return content;
+  }
+
   /** Filter out leaked internal metadata from appearing in the reasoning chain UI */
   function isSafeReasoningContent(text: string): boolean {
     if (!text || text.trim().length === 0) return false;
@@ -643,6 +662,13 @@ export function AIAssistant() {
         },
         onDone: () => {
           updateStatus(assistantId, "finished");
+          // Post-process: strip duplicated pre-answer reasoning preview text.
+          // Coze model sometimes emits a raw-text "preview" before the proper markdown answer.
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId ? { ...msg, content: stripReasoningPreview(msg.content) } : msg,
+            ),
+          );
         },
         onError: (message: string) => {
           updateStatus(assistantId, "finished");
