@@ -54,9 +54,10 @@ public class AgriAgentController {
             @RequestParam("question") String question,
             @RequestParam(value = "userId", required = false) String userId,
             @RequestParam(value = "conversationId", required = false) String conversationId) {
-        ImageStorageService.StoredImage stored = imageStorageService.store(image);
+        imageStorageService.validate(image);
+        String fileId = cozeAgentService.uploadFile(image);
         AgriAgentChatRequest request = new AgriAgentChatRequest(question, userId, conversationId, null, null);
-        return toEmitter(cozeAgentService.streamChatWithImageUrl(request, stored.publicUrl()));
+        return toEmitter(cozeAgentService.streamChatWithImage(request, fileId));
     }
 
     @GetMapping("/uploads/{date}/{filename:.+}")

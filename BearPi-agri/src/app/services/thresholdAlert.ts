@@ -1,4 +1,6 @@
-const THRESHOLD_ALERT_BASE = "/api/v1/threshold-alert";
+import { withApiBase } from "../lib/env";
+
+const THRESHOLD_ALERT_BASE = withApiBase("/api/v1/threshold-alert");
 
 interface ApiResponse<T> {
   code: number;
