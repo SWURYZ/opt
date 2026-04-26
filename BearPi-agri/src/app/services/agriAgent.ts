@@ -214,10 +214,26 @@ function readableInternalEventText(msgType: string, obj: Record<string, unknown>
   if (msgType === "knowledge_recall") {
     return summarizeKnowledgeRecall(obj.data);
   }
+  // Skip tool_result/tool_response events - they are handled separately via SSE events
+  // and generic status messages like "tool has returned" clutter the reasoning chain
+  if (msgType === "tool_result" || msgType === "tool_response") {
+    return null;
+  }
   if (msgType.includes("tool") || msgType.includes("function")) {
     return summarizeToolEvent(msgType, obj);
   }
   return statusTextFor(msgType);
+}
+
+function statusTextFor(msgType: string): string | null {
+  const msgTypeLower = msgType.toLowerCase();
+  if (msgTypeLower.includes("verbose") || msgTypeLower.includes("debug")) {
+    return null;
+  }
+  if (msgTypeLower.includes("trace")) {
+    return null;
+  }
+  return `正在处理 ${msgType}...`;
 }
 
 function summarizeKnowledgeRecall(data: unknown): string {
@@ -241,15 +257,17 @@ function summarizeKnowledgeRecall(data: unknown): string {
     : `正在检索农业知识库：召回 ${chunks.length} 条相关资料。`;
 }
 
-function summarizeToolEvent(msgType: string, obj: Record<string, unknown>): string {
+function summarizeToolEvent(msgType: string, obj: Record<string, unknown>): string | null {
   const name = firstString(obj.name, obj.tool_name, obj.function_name)
     || (msgType.includes("function") ? "函数工具" : "农业分析工具");
   const content = firstString(obj.content, obj.data, obj.response_for_model);
   if (content?.includes("RPCError") || content?.includes("限流")) {
     return `${name} 暂时不可用，正在准备保守回答。`;
   }
+  // Skip result/response messages - they clutter the reasoning chain
+  // and the actual reasoning content comes through via thinking events
   if (msgType.includes("response") || msgType.includes("result")) {
-    return `${name} 已返回结果，正在整理答案。`;
+    return null;
   }
   return `正在调用 ${name}。`;
 }
@@ -296,7 +314,9 @@ function cleanAnswerText(value: string | null): string | null {
   }
   text = text.replace(/<\|FunctionCallBegin\|>[\s\S]*?(?:<\|FunctionCallEnd\|>|$)/g, "");
   text = text.replace(/RPCError\{[^}]*}/g, "");
-  text = text.replace(/^\s*(用户现在|首先|不对，|所以应该|然后按照|看系统提示|按照要求|现在组织语言|接下来)[\s\S]*?(?=(?:ryz你好|【结论】|当前工具数据|这是|您好|你好|同学好))/g, "");
+  // Only strip internal planning prefixes that are clearly NOT the final answer
+  // Do NOT strip content just because it starts with "首先" or "用户现在" - these could be legitimate answer content
+  text = text.replace(/^用户现在[^\n。]*?[。\n]/g, "");
   text = text.trim();
   if (!text || looksLikeInternalJson(text) || looksLikeReasoningText(text)) return null;
   return text;
@@ -304,15 +324,11 @@ function cleanAnswerText(value: string | null): string | null {
 
 function looksLikeReasoningText(value: string): boolean {
   const text = value.trim();
+  // Only check if text STARTS with reasoning patterns - not if it contains them anywhere
+  // This preserves legitimate answer content that may discuss tool usage
   return /^(用户现在|首先|不对，|所以应该|然后按照|看系统提示|按照要求|现在组织语言|接下来可以)/.test(text)
     || text.includes("<|FunctionCallBegin|>")
-    || text.includes("tupianlijie-imgUnderstand")
-    || text.includes("应该调用")
-    || text.includes("调用工具")
-    || text.includes("组织语言")
-    || text.includes("我的角色是")
-    || text.includes("可以问问用户")
-    || /引导用户|按照.*要求|因为是.*助手/.test(text);
+    || text.includes("tupianlijie-imgUnderstand");
 }
 
 function looksLikeInternalMetadata(value: string): boolean {
@@ -415,13 +431,17 @@ async function consumeSseStream(res: Response, callbacks: StreamCallbacks) {
     }
     if (evt.event === "thinking") {
       const parsed = parseJsonChunk(data);
-      if (parsed.kind === "thinking") callbacks.onThinking?.(parsed.text);
-      // Silently skip non-actionable thinking events (raw reasoning text, etc.)
-      // The UI already shows "芽芽正在思考..." based on message.status === "thinking"
+      if (parsed.kind === "thinking") {
+        callbacks.onThinking?.(parsed.text);
+      } else if (data && !data.startsWith("{") && !data.startsWith("[")) {
+        // Raw text thinking content (non-JSON) - pass directly to onThinking
+        callbacks.onThinking?.(data);
+      }
       return;
     }
     if (evt.event === "tool_result") {
-      callbacks.onStatus?.("农业分析工具已返回结果...");
+      // Ignore tool_result events entirely - they don't contribute useful reasoning content
+      // and the "tool has returned" messages clutter the reasoning chain.
       return;
     }
     if (evt.event === "context" || evt.event === "conversation" || evt.event === "conversationId") {

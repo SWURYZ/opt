@@ -17,15 +17,15 @@ import {
   MicOff,
   ImagePlus,
   X,
-  ChevronDown,
-  ChevronRight,
-  Brain,
   Volume2,
   VolumeX,
+  Brain,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { streamAgriAgentChat, streamAgriAgentChatWithImage } from "../services/agriAgent";
 import { fetchRealtimeSnapshot } from "../services/realtime";
-import { sendManualControl } from "../services/deviceControl";
+import { sendManualControl, type ManualAction, type ManualCommandType } from "../services/deviceControl";
 import { speak, stopSpeaking, isTTSSupported } from "../lib/speech";
 import { getCurrentUser } from "../services/auth";
 
@@ -108,6 +108,123 @@ function findGreetingRuleFromMessages(messages: Message[]): boolean {
   return messages.some((msg) => msg.role === "user" && asksGreetingFirst(msg.content || ""));
 }
 
+function keepLastConclusionBlock(content: string): string {
+  if (!content) return content;
+  const marker = "【结论】";
+  const first = content.indexOf(marker);
+  if (first < 0) return content;
+  const last = content.lastIndexOf(marker);
+  if (last <= first) return content;
+
+  const preface = content.slice(0, first).trimEnd();
+  const conclusion = content.slice(last).trimStart();
+  if (!conclusion) return content;
+  return preface ? `${preface}\n\n${conclusion}` : conclusion;
+}
+
+function removePlanningPreface(content: string): string {
+  if (!content) return content;
+  return content
+    .replace(/为了帮你提供[^\n。]*?(我将调用|会调用)[^\n。]*?工具[^\n。]*?[。\n]/g, "")
+    .replace(/我将调用[^\n。]*?工具[^\n。]*?[。\n]/g, "")
+    .trim();
+}
+
+function keepLastGreetingToEnd(content: string): string {
+  if (!content) return content;
+  const lastConclusion = content.lastIndexOf("【结论】");
+  if (lastConclusion < 0) return content;
+
+  const head = content.slice(0, lastConclusion);
+  // Find the last greeting in the head section
+  const lastGreeting = Math.max(head.lastIndexOf("你好"), head.lastIndexOf("您好"));
+  if (lastGreeting < 0) return content.slice(lastConclusion).trimStart();
+
+  // Skip greetings that immediately precede a "【结论】" marker
+  // (they are inside the conclusion block, not the start of the next section)
+  const nearConclusion = head.slice(lastGreeting).indexOf("【结论】");
+  if (nearConclusion >= 0 && nearConclusion < 40) {
+    // greeting is within 40 chars of a conclusion marker — it's inside that block
+    // return from the last conclusion onward instead
+    return content.slice(lastConclusion).trimStart();
+  }
+  return content.slice(lastGreeting).trimStart();
+}
+
+function dedupeConsecutiveLines(content: string): string {
+  if (!content) return content;
+  const lines = content.split(/\r?\n/);
+  const out: string[] = [];
+  for (const line of lines) {
+    const normalized = line.trim();
+    const prev = out.length > 0 ? out[out.length - 1].trim() : "";
+    if (normalized && normalized === prev) continue;
+    out.push(line);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function collapseRepeatedWholeBlock(content: string): string {
+  if (!content) return content;
+  let text = content.trim();
+
+  // If the whole answer is repeated as A + A (possibly separated by whitespace), keep one A.
+  // Apply in a loop to handle triple repeats like A+A+A.
+  while (true) {
+    const match = text.match(/^([\s\S]{20,}?)\s*\1$/);
+    if (!match) break;
+    const next = match[1].trim();
+    if (!next || next === text) break;
+    text = next;
+  }
+  return text;
+}
+
+function sanitizeFinalAnswer(content: string): string {
+  if (!content) return content;
+  // Step 0: strip broken image markdown (Coze sends malformed URLs with missing file IDs)
+  let text = content
+    .replace(/!\[[^\]]*\]\([^)]*\/image\/jpeg\/\.jpg[^)]*\)/g, "")
+    .replace(/!\[[^\]]*\]\([^)]*_wh\.jpg[^)]*\)/g, "")
+    .trim();
+  // Step 1: collapse A+A whole-block repetition (reasoning preview + formal answer)
+  text = collapseRepeatedWholeBlock(text);
+  // Step 2: keep only the last "【结论】" block to drop reasoning preview
+  text = keepLastConclusionBlock(text);
+  // Step 3: remove planning/调用工具 prefaces
+  text = removePlanningPreface(text);
+  // Step 4: keep from last greeting to end (removes reasoning preview before formal answer)
+  text = keepLastGreetingToEnd(text);
+  // Step 5: deduplicate consecutive identical lines
+  text = dedupeConsecutiveLines(text);
+  // Step 6: final collapse of any remaining A+A blocks
+  return collapseRepeatedWholeBlock(text);
+}
+
+function mergeStreamingText(existing: string, incoming: string): string {
+  const prev = existing || "";
+  const next = incoming || "";
+  if (!next) return prev;
+  if (!prev) return next;
+  if (next === prev) return prev;
+  if (prev.includes(next) && next.length >= 20) return prev;
+  if (next.includes(prev) && prev.length >= 20) return next;
+
+  // Some providers send cumulative text chunks; replace in that case.
+  if (next.startsWith(prev)) return next;
+  // Duplicate chunk already present at tail.
+  if (prev.endsWith(next)) return prev;
+
+  // Merge by maximal suffix-prefix overlap.
+  const max = Math.min(prev.length, next.length);
+  for (let k = max; k >= 1; k -= 1) {
+    if (prev.slice(-k) === next.slice(0, k)) {
+      return prev + next.slice(k);
+    }
+  }
+  return prev + next;
+}
+
 function buildQuestionWithMemory(question: string, userName: string | null, greetingFirst: boolean): string {
   const directives: string[] = [];
 
@@ -145,6 +262,59 @@ function buildRecentDialogueContext(messages: Message[], currentQuestion: string
   }
 
   return `【最近对话上下文】\n${history.join("\n")}\n\n【当前问题】${currentQuestion}`;
+}
+
+/* --- Reasoning Chain Block (DeepSeek/O1 style) --- */
+function ReasoningBlock({ content, status }: { content: string; status: MessageStatus }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const reasoningEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if ((status === "thinking" || status === "replying") && reasoningEndRef.current) {
+      reasoningEndRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [content, status]);
+
+  useEffect(() => {
+    if (status === "finished" && content) {
+      setCollapsed(true);
+    }
+  }, [status, content]);
+
+  if (!content && status !== "thinking") return null;
+
+  const showBody = !collapsed;
+
+  return (
+    <div className="mb-3 border border-purple-200 rounded-xl overflow-hidden bg-gradient-to-b from-purple-50 to-white">
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-purple-700 hover:bg-purple-100/40 transition-colors"
+      >
+        <Brain className={"w-4 h-4 " + (status !== "finished" ? "animate-pulse text-purple-500" : "text-purple-400")} />
+        <span className="font-semibold">{status !== "finished" ? "芽芽正在思考..." : "推理过程"}</span>
+        {status !== "finished" && (
+          <div className="flex gap-0.5 ml-1">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: i * 0.2 + "s" }} />
+            ))}
+          </div>
+        )}
+        <span className="ml-auto text-purple-400">
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </span>
+      </button>
+      {showBody && (
+        <div className="px-3 pb-3 border-t border-purple-100 max-h-72 overflow-y-auto">
+          <div className="text-xs text-purple-600/80 leading-relaxed whitespace-pre-wrap pt-2">
+            {content || "正在理解问题、检索知识库并组织回答..."}
+            {status !== "finished" && <span className="inline-block w-1 h-3 bg-purple-400 ml-0.5 animate-pulse" />}
+            <div ref={reasoningEndRef} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* --- Markdown renderer --- */
@@ -263,59 +433,6 @@ function renderInline(text: string): (string | React.JSX.Element)[] {
   return parts;
 }
 
-/* --- Reasoning Block (DeepSeek/O1 style) --- */
-function ReasoningBlock({ content, status }: { content: string; status: MessageStatus }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const reasoningEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if ((status === "thinking" || status === "replying") && reasoningEndRef.current) {
-      reasoningEndRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }, [content, status]);
-
-  useEffect(() => {
-    if (status === "finished" && content) {
-      setCollapsed(true);
-    }
-  }, [status, content]);
-
-  if (!content && status !== "thinking") return null;
-
-  const showBody = !collapsed;
-
-  return (
-    <div className="mb-3 border border-purple-200 rounded-xl overflow-hidden bg-gradient-to-b from-purple-50 to-white">
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-purple-700 hover:bg-purple-100/40 transition-colors"
-      >
-        <Brain className={"w-4 h-4 " + (status !== "finished" ? "animate-pulse text-purple-500" : "text-purple-400")} />
-        <span className="font-semibold">{status !== "finished" ? "芽芽正在思考..." : "推理过程"}</span>
-        {status !== "finished" && (
-          <div className="flex gap-0.5 ml-1">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: i * 0.2 + "s" }} />
-            ))}
-          </div>
-        )}
-        <span className="ml-auto text-purple-400">
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </span>
-      </button>
-      {showBody && (
-        <div className="px-3 pb-3 border-t border-purple-100 max-h-72 overflow-y-auto">
-          <div className="text-xs text-purple-600/80 leading-relaxed whitespace-pre-wrap pt-2">
-            {content || "正在理解问题、检索知识库并组织回答..."}
-            {status !== "finished" && <span className="inline-block w-1 h-3 bg-purple-400 ml-0.5 animate-pulse" />}
-            <div ref={reasoningEndRef} />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* --- Speech Recognition Hook --- */
 function useSpeechRecognition(onResult: (text: string) => void) {
   const [listening, setListening] = useState(false);
@@ -399,7 +516,7 @@ export function AIAssistant() {
       role: "assistant",
       content: buildWelcome(null, defaultData),
       reasoningContent: "",
-      status: "thinking",
+      status: "finished",
       timestamp: formatTime(new Date()),
       sources: [],
     },
@@ -460,8 +577,8 @@ export function AIAssistant() {
    */
   function stripReasoningPreview(content: string): string {
     if (!content) return content;
-    // Find all occurrences of greeting pattern like "你好ryz！" / "你好ryz！\n"
-    const greetingRe = /你好\s*\w*[!！]\s*\n?/g;
+    // Match greetings with optional comma and optional newline: "你好ryz！" / "你好，ryz！"
+    const greetingRe = /你好[，,]?\s*\w*[!！]\s*\n?/g;
     const matches = content.match(greetingRe);
     if (matches && matches.length > 1) {
       // Keep only the text after the last greeting
@@ -494,7 +611,12 @@ export function AIAssistant() {
     setMessages((prev) =>
       prev.map((msg) =>
         msg.id === assistantId
-          ? { ...msg, [field]: msg[field] + text }
+          ? {
+            ...msg,
+            [field]: field === "content"
+              ? mergeStreamingText(msg[field], text)
+              : msg[field] + text,
+          }
           : msg,
       ),
     );
@@ -517,7 +639,7 @@ export function AIAssistant() {
   }
 
   /** 解析语音指令中的设备开关命令 */
-  function parseDeviceCommand(text: string): { commandType: string; action: string; label: string } | null {
+  function parseDeviceCommand(text: string): { commandType: ManualCommandType; action: ManualAction; label: string } | null {
     const t = text.replace(/\s+/g, "");
     // 补光灯
     if (/(开|打开|开启|启动)(补光灯|灯|灯光)/.test(t)) return { commandType: "LIGHT_CONTROL", action: "ON", label: "补光灯开启" };
@@ -529,7 +651,7 @@ export function AIAssistant() {
   }
 
   /** 执行设备开关命令（语音触发） */
-  async function executeVoiceDeviceCommand(cmd: { commandType: string; action: string; label: string }) {
+  async function executeVoiceDeviceCommand(cmd: { commandType: ManualCommandType; action: ManualAction; label: string }) {
     const now = Date.now();
     const userMsg: Message = {
       id: now.toString(),
@@ -649,10 +771,21 @@ export function AIAssistant() {
         },
         onStatus: (message: string) => {
           if (!isSafeReasoningContent(message)) return;
-          if (message) {
-            appendField(assistantId, "reasoningContent", `${message}\n`);
-            updateStatus(assistantId, "thinking");
-          }
+          setMessages((prev) => {
+            const msg = prev.find((m) => m.id === assistantId);
+            if (!msg) return prev;
+            // Deduplicate: skip if ANY line of reasoningContent already contains this message
+            const normalizedMsg = message.trim();
+            const lines = msg.reasoningContent.split("\n");
+            const hasDuplicate = lines.some(line => line.trim() === normalizedMsg);
+            if (hasDuplicate) return prev;
+            return prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, reasoningContent: m.reasoningContent + `${message}\n` }
+                : m,
+            );
+          });
+          updateStatus(assistantId, "thinking");
         },
         onContext: (id: string) => {
           const trimmed = id?.trim();
@@ -662,11 +795,12 @@ export function AIAssistant() {
         },
         onDone: () => {
           updateStatus(assistantId, "finished");
-          // Post-process: strip duplicated pre-answer reasoning preview text.
-          // Coze model sometimes emits a raw-text "preview" before the proper markdown answer.
+          // Post-process: keep only final, non-duplicated answer block for display.
           setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === assistantId ? { ...msg, content: stripReasoningPreview(msg.content) } : msg,
+              msg.id === assistantId
+                ? { ...msg, content: sanitizeFinalAnswer(stripReasoningPreview(msg.content)) }
+                : msg,
             ),
           );
         },
@@ -916,6 +1050,11 @@ export function AIAssistant() {
 
             {/* Bubble */}
             <div className={"max-w-2xl " + (msg.role === "user" ? "items-end" : "items-start") + " flex flex-col gap-1"}>
+              {/* Reasoning chain — shown above the main bubble for assistant messages */}
+              {msg.role === "assistant" && (
+                <ReasoningBlock content={msg.reasoningContent} status={msg.status} />
+              )}
+
               {/* User image preview */}
               {msg.role === "user" && msg.imagePreview && (
                 <div className="rounded-xl overflow-hidden border border-blue-200 mb-1">
@@ -931,10 +1070,6 @@ export function AIAssistant() {
               >
                 {msg.role === "assistant" ? (
                   <div className="space-y-1">
-                    <ReasoningBlock
-                      content={msg.reasoningContent}
-                      status={msg.status}
-                    />
                     {renderMarkdown(msg.content)}
                   </div>
                 ) : (
